@@ -1,0 +1,831 @@
+// ===========================================
+// PRISMA SCHEMA - DUBIZZLE MARKETPLACE
+// ===========================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ===========================================
+// USER & AUTHENTICATION MODELS
+// ===========================================
+
+model Role {
+  id          Int          @id @default(autoincrement())
+  name        String       @unique // admin, moderator, seller, buyer
+  description String?
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          Int              @id @default(autoincrement())
+  key         String           @unique // e.g., listing.approve, user.block
+  description String?
+  createdAt   DateTime         @default(now()) @map("created_at")
+  roles       RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id                  Int       @id @default(autoincrement())
+  name                String
+  email               String    @unique
+  phone               String?   
+  passwordHash        String?   @map("password_hash")
+  roleId              Int       @map("role_id")
+  isVerified          Boolean   @default(false) @map("is_verified")
+  isBlocked           Boolean   @default(false) @map("is_blocked")
+  canPostListings     Boolean   @default(true) @map("can_post_listings")
+  avatarUrl           String?   @map("avatar_url")
+  bio                 String?
+  lastLoginAt         DateTime? @map("last_login_at")
+  lastListingPostedAt DateTime? @map("last_listing_posted_at")
+  lastChatMessageAt   DateTime? @map("last_chat_message_at")
+  isDeleted           Boolean   @default(false) @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  role                Role                   @relation(fields: [roleId], references: [id])
+  refreshTokens       RefreshToken[]
+  passwordResetTokens PasswordResetToken[]
+  otpRequests         OtpRequest[]
+  deviceSessions      DeviceSession[]
+  listings            Listing[]
+  favorites           Favorite[]
+  recentlyViewed      RecentlyViewed[]
+  listingViews        ListingView[]
+  listingComments     ListingComment[]
+  priceAlerts         PriceAlert[]
+  chatRoomsAsBuyer    ChatRoom[]             @relation("BuyerChats")
+  chatRoomsAsSeller   ChatRoom[]             @relation("SellerChats")
+  chatMessages        ChatMessage[]
+  reportedByMe        ReportedUser[]         @relation("Reporter")
+  reportsAgainstMe    ReportedUser[]         @relation("ReportedUser")
+  listingReports      ReportedListing[]
+  supportTickets      SupportTicket[]
+  supportMessages     SupportTicketMessage[]
+  auditLogs           AuditLog[]
+  apiUsageLogs        ApiUsageLog[]
+  fraudLogs           FraudLog[]
+  notifications       Notification[]
+  moderationAssigned  ModerationQueue[]      @relation("AssignedModerator")
+  importBatches       ListingImportBatch[]
+  verifications       UserVerification[]
+  adminNotes          AdminNote[]            @relation("AdminNotes")
+  
+  @@index([email])
+  @@index([phone])
+  @@index([roleId])
+  @@index([isBlocked])
+  @@index([createdAt])
+  @@map("users")
+}
+
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        Int       @id @default(autoincrement())
+  userId    Int       @map("user_id")
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("password_reset_tokens")
+}
+
+model OtpRequest {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  phone     String
+  otpHash   String   @map("otp_hash")
+  attempts  Int      @default(0)
+  expiresAt DateTime @map("expires_at")
+  verifiedAt DateTime? @map("verified_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([phone])
+  @@index([expiresAt])
+  @@map("otp_requests")
+}
+
+model DeviceSession {
+  id         Int      @id @default(autoincrement())
+  userId     Int      @map("user_id")
+  ipAddress  String   @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  deviceInfo Json?    @map("device_info") // {browser, os, device_type}
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([ipAddress])
+  @@index([lastSeenAt])
+  @@map("device_sessions")
+}
+
+// ===========================================
+// LISTING MODELS
+// ===========================================
+
+model Category {
+  id              Int              @id @default(autoincrement())
+  name            String
+  slug            String           @unique
+  description     String?
+  iconUrl         String?          @map("icon_url")
+  parentId        Int?             @map("parent_id")
+  sortOrder       Int              @default(0) @map("sort_order")
+  isActive        Boolean          @default(true) @map("is_active")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  parent          Category?        @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children        Category[]       @relation("CategoryHierarchy")
+  listings        Listing[]
+  listingCategories ListingCategory[]
+
+  @@index([parentId])
+  @@index([slug])
+  @@map("categories")
+}
+
+model Listing {
+  id              Int              @id @default(autoincrement())
+  userId          Int              @map("user_id")
+  title           String
+  description     String
+  price           Decimal          @db.Decimal(12, 2)
+  currency        String           @default("AED")
+  categoryId      Int              @map("category_id")
+  city            String?
+  country         String?
+  address         String?
+  latitude        Decimal?         @db.Decimal(10, 8)
+  longitude       Decimal?         @db.Decimal(11, 8)
+  status          ListingStatus    @default(draft)
+  reasonRejected  String?          @map("reason_rejected")
+  boostedUntil    DateTime?        @map("boosted_until")
+  viewsCount      Int              @default(0) @map("views_count")
+  favoritesCount  Int              @default(0) @map("favorites_count")
+  contactPhone    String?          @map("contact_phone")
+  contactEmail    String?          @map("contact_email")
+  isNegotiable    Boolean          @default(true) @map("is_negotiable")
+  condition       String?          // new, used, refurbished
+  attributes      Json?            // flexible attributes based on category
+  isDeleted       Boolean          @default(false) @map("is_deleted")
+  deletedAt       DateTime?        @map("deleted_at")
+  expiresAt       DateTime?        @map("expires_at")
+  publishedAt     DateTime?        @map("published_at")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  user            User             @relation(fields: [userId], references: [id])
+  category        Category         @relation(fields: [categoryId], references: [id])
+  images          ListingImage[]
+  listingCategories ListingCategory[]
+  favorites       Favorite[]
+  views           ListingView[]
+  recentlyViewed  RecentlyViewed[]
+  comments        ListingComment[]
+  priceAlerts     PriceAlert[]
+  chatRooms       ChatRoom[]
+  reports         ReportedListing[]
+  shortLinks      ShortLink[]
+  moderationQueue ModerationQueue[]
+  importRows      ListingImportRow[]
+  adminNotes      AdminNote[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([price])
+  @@index([city])
+  @@index([country])
+  @@index([boostedUntil])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("listings")
+}
+
+enum ListingStatus {
+  draft
+  pending
+  approved
+  rejected
+  sold
+  expired
+
+  @@map("listing_status")
+}
+
+model ListingImage {
+  id         Int      @id @default(autoincrement())
+  listingId  Int      @map("listing_id")
+  imageUrl   String   @map("image_url")
+  s3Key      String?  @map("s3_key")
+  orderIndex Int      @default(0) @map("order_index")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at")
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([orderIndex])
+  @@map("listing_images")
+}
+
+model ListingCategory {
+  id         Int      @id @default(autoincrement())
+  listingId  Int      @map("listing_id")
+  categoryId Int      @map("category_id")
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([listingId, categoryId])
+  @@map("listing_categories")
+}
+
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  listingId Int      @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([listingId])
+  @@map("favorites")
+}
+
+model RecentlyViewed {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  listingId Int      @map("listing_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([viewedAt])
+  @@map("recently_viewed")
+}
+
+model ListingView {
+  id         Int      @id @default(autoincrement())
+  listingId  Int      @map("listing_id")
+  userId     Int?     @map("user_id")
+  ipAddress  String   @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  deviceInfo Json?    @map("device_info")
+  createdAt  DateTime @default(now()) @map("created_at")
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([listingId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("listing_views")
+}
+
+model ListingComment {
+  id              Int              @id @default(autoincrement())
+  listingId       Int              @map("listing_id")
+  userId          Int              @map("user_id")
+  parentCommentId Int?             @map("parent_comment_id")
+  content         String
+  status          CommentStatus    @default(visible)
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  listing         Listing          @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user            User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent          ListingComment?  @relation("CommentReplies", fields: [parentCommentId], references: [id])
+  replies         ListingComment[] @relation("CommentReplies")
+
+  @@index([listingId])
+  @@index([userId])
+  @@index([parentCommentId])
+  @@map("listing_comments")
+}
+
+enum CommentStatus {
+  visible
+  hidden
+  deleted
+
+  @@map("comment_status")
+}
+
+model PriceAlert {
+  id             Int      @id @default(autoincrement())
+  userId         Int      @map("user_id")
+  listingId      Int      @map("listing_id")
+  priceThreshold Decimal  @map("price_threshold") @db.Decimal(12, 2)
+  isActive       Boolean  @default(true) @map("is_active")
+  triggeredAt    DateTime? @map("triggered_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing        Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([listingId])
+  @@map("price_alerts")
+}
+
+model ShortLink {
+  id         Int       @id @default(autoincrement())
+  shortCode  String    @unique @map("short_code")
+  targetType String    @map("target_type") // listing, profile, etc.
+  targetId   Int       @map("target_id")
+  clicks     Int       @default(0)
+  expiresAt  DateTime? @map("expires_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  listing    Listing?  @relation(fields: [targetId], references: [id], onDelete: Cascade)
+
+  @@index([shortCode])
+  @@map("short_links")
+}
+
+model ListingImportBatch {
+  id           Int                @id @default(autoincrement())
+  uploadedBy   Int                @map("uploaded_by")
+  fileName     String             @map("file_name")
+  status       ImportStatus       @default(pending)
+  totalRows    Int                @default(0) @map("total_rows")
+  successCount Int                @default(0) @map("success_count")
+  errorCount   Int                @default(0) @map("error_count")
+  createdAt    DateTime           @default(now()) @map("created_at")
+  completedAt  DateTime?          @map("completed_at")
+  user         User               @relation(fields: [uploadedBy], references: [id])
+  rows         ListingImportRow[]
+
+  @@index([uploadedBy])
+  @@index([status])
+  @@map("listing_import_batches")
+}
+
+model ListingImportRow {
+  id           Int               @id @default(autoincrement())
+  batchId      Int               @map("batch_id")
+  rowNumber    Int               @map("row_number")
+  rawData      Json              @map("raw_data")
+  listingId    Int?              @map("listing_id")
+  status       ImportRowStatus   @default(pending)
+  errorMessage String?           @map("error_message")
+  createdAt    DateTime          @default(now()) @map("created_at")
+  batch        ListingImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  listing      Listing?          @relation(fields: [listingId], references: [id], onDelete: SetNull)
+
+  @@index([batchId])
+  @@map("listing_import_rows")
+}
+
+enum ImportStatus {
+  pending
+  processing
+  completed
+  failed
+
+  @@map("import_status")
+}
+
+enum ImportRowStatus {
+  pending
+  success
+  failed
+
+  @@map("import_row_status")
+}
+
+// ===========================================
+// CHAT MODELS
+// ===========================================
+
+model ChatRoom {
+  id        Int           @id @default(autoincrement())
+  listingId Int           @map("listing_id")
+  buyerId   Int           @map("buyer_id")
+  sellerId  Int           @map("seller_id")
+  isBlocked Boolean       @default(false) @map("is_blocked")
+  blockedBy Int?          @map("blocked_by")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  listing   Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  buyer     User          @relation("BuyerChats", fields: [buyerId], references: [id])
+  seller    User          @relation("SellerChats", fields: [sellerId], references: [id])
+  messages  ChatMessage[]
+
+  @@unique([listingId, buyerId, sellerId])
+  @@index([buyerId])
+  @@index([sellerId])
+  @@index([listingId])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id         Int       @id @default(autoincrement())
+  roomId     Int       @map("room_id")
+  senderId   Int       @map("sender_id")
+  content    String
+  isRead     Boolean   @default(false) @map("is_read")
+  readAt     DateTime? @map("read_at")
+  attachment String?   // URL to attachment if any
+  isDeleted  Boolean   @default(false) @map("is_deleted")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  room       ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender     User      @relation(fields: [senderId], references: [id])
+
+  @@index([roomId])
+  @@index([senderId])
+  @@index([roomId, createdAt])
+  @@index([isRead])
+  @@map("chat_messages")
+}
+
+// ===========================================
+// REPORT & MODERATION MODELS
+// ===========================================
+
+model ReportedUser {
+  id             Int          @id @default(autoincrement())
+  reportedUserId Int          @map("reported_user_id")
+  reporterId     Int          @map("reporter_id")
+  reason         String
+  details        String?
+  status         ReportStatus @default(pending)
+  reviewedBy     Int?         @map("reviewed_by")
+  reviewedAt     DateTime?    @map("reviewed_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id])
+  reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
+
+  @@index([reportedUserId])
+  @@index([reporterId])
+  @@index([status])
+  @@map("reported_users")
+}
+
+model ReportedListing {
+  id         Int          @id @default(autoincrement())
+  listingId  Int          @map("listing_id")
+  reporterId Int          @map("reporter_id")
+  reason     String
+  details    String?
+  status     ReportStatus @default(pending)
+  reviewedBy Int?         @map("reviewed_by")
+  reviewedAt DateTime?    @map("reviewed_at")
+  createdAt  DateTime     @default(now()) @map("created_at")
+  listing    Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reporter   User         @relation(fields: [reporterId], references: [id])
+
+  @@index([listingId])
+  @@index([reporterId])
+  @@index([status])
+  @@map("reported_listings")
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  dismissed
+  actioned
+
+  @@map("report_status")
+}
+
+model ModerationQueue {
+  id               Int              @id @default(autoincrement())
+  itemType         String           @map("item_type") // listing, user, comment
+  itemId           Int              @map("item_id")
+  status           ModerationStatus @default(pending)
+  assignedTo       Int?             @map("assigned_to")
+  moderatorComment String?          @map("moderator_comment")
+  priority         Int              @default(0)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  assignedModerator User?           @relation("AssignedModerator", fields: [assignedTo], references: [id])
+  listing          Listing?         @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([status, createdAt])
+  @@index([itemType, itemId])
+  @@index([assignedTo])
+  @@map("moderation_queue")
+}
+
+enum ModerationStatus {
+  pending
+  approved
+  rejected
+  needs_changes
+
+  @@map("moderation_status")
+}
+
+// ===========================================
+// FRAUD & ANALYTICS MODELS
+// ===========================================
+
+model FraudLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  type      String   // TOO_MANY_LISTINGS, REPEATED_PHONE, REPEATED_REJECTION, MANY_DEVICES
+  details   Json
+  riskScore Int      @map("risk_score")
+  isReviewed Boolean @default(false) @map("is_reviewed")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([type])
+  @@index([riskScore])
+  @@index([createdAt])
+  @@map("fraud_logs")
+}
+
+model SearchLog {
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  query     String
+  filters   Json?
+  resultsCount Int   @default(0) @map("results_count")
+  ipAddress String?  @map("ip_address")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([query])
+  @@index([createdAt])
+  @@map("search_logs")
+}
+
+model ApiUsageLog {
+  id              Int      @id @default(autoincrement())
+  userId          Int?     @map("user_id")
+  endpoint        String
+  method          String
+  statusCode      Int      @map("status_code")
+  latencyMs       Int      @map("latency_ms")
+  requestSizeBytes Int?    @map("request_size_bytes")
+  responseSizeBytes Int?   @map("response_size_bytes")
+  ipAddress       String   @map("ip_address")
+  userAgent       String?  @map("user_agent")
+  errorMessage    String?  @map("error_message")
+  createdAt       DateTime @default(now()) @map("created_at")
+  user            User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([endpoint])
+  @@index([userId])
+  @@index([statusCode])
+  @@index([createdAt])
+  @@index([endpoint, createdAt])
+  @@map("api_usage_logs")
+}
+
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorUserId  Int      @map("actor_user_id")
+  action       String   // ADMIN_LOGIN, LISTING_APPROVE, USER_BLOCK, etc.
+  entityType   String?  @map("entity_type") // user, listing, ticket, etc.
+  entityId     Int?     @map("entity_id")
+  metadata     Json?
+  ipAddress    String   @map("ip_address")
+  deviceInfo   Json?    @map("device_info")
+  createdAt    DateTime @default(now()) @map("created_at")
+  actor        User     @relation(fields: [actorUserId], references: [id])
+
+  @@index([actorUserId])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+// ===========================================
+// SUPPORT MODELS
+// ===========================================
+
+model SupportTicket {
+  id        Int                    @id @default(autoincrement())
+  userId    Int?                   @map("user_id")
+  subject   String
+  message   String
+  status    TicketStatus           @default(open)
+  priority  TicketPriority         @default(medium)
+  createdAt DateTime               @default(now()) @map("created_at")
+  updatedAt DateTime               @updatedAt @map("updated_at")
+  user      User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages  SupportTicketMessage[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+  @@map("support_tickets")
+}
+
+model SupportTicketMessage {
+  id         Int           @id @default(autoincrement())
+  ticketId   Int           @map("ticket_id")
+  senderId   Int?          @map("sender_id")
+  senderType String        @map("sender_type") // user, admin
+  message    String
+  createdAt  DateTime      @default(now()) @map("created_at")
+  ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  sender     User?         @relation(fields: [senderId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([senderId])
+  @@map("support_ticket_messages")
+}
+
+enum TicketStatus {
+  open
+  in_progress
+  resolved
+  closed
+
+  @@map("ticket_status")
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+
+  @@map("ticket_priority")
+}
+
+// ===========================================
+// NOTIFICATION MODELS
+// ===========================================
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            // extra data (listingId, chatRoomId, etc.)
+  isRead    Boolean          @default(false) @map("is_read")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  listing_approved
+  listing_rejected
+  listing_expired
+  new_message
+  price_alert
+  new_favorite
+  support_reply
+  system
+
+  @@map("notification_type")
+}
+
+// ===========================================
+// WEBHOOK MODELS
+// ===========================================
+
+model WebhookEvent {
+  id          Int           @id @default(autoincrement())
+  type        String        // payment, etc.
+  externalId  String?       @map("external_id")
+  payload     Json
+  status      WebhookStatus @default(received)
+  attempts    Int           @default(0)
+  lastError   String?       @map("last_error")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  processedAt DateTime?     @map("processed_at")
+
+  @@index([type])
+  @@index([status])
+  @@index([externalId])
+  @@map("webhook_events")
+}
+
+enum WebhookStatus {
+  received
+  processing
+  processed
+  failed
+
+  @@map("webhook_status")
+}
+
+// ===========================================
+// USER VERIFICATION (Feature #11)
+// ===========================================
+
+model UserVerification {
+  id              Int       @id @default(autoincrement())
+  userId          Int       @map("user_id")
+  documentType    String    @map("document_type") // national_id, passport, drivers_license
+  documentUrl     String    @map("document_url")
+  documentS3Key   String?   @map("document_s3_key")
+  status          VerificationStatus @default(pending)
+  rejectionReason String?   @map("rejection_reason")
+  reviewedBy      Int?      @map("reviewed_by")
+  reviewedAt      DateTime? @map("reviewed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([status])
+  @@map("user_verifications")
+}
+
+enum VerificationStatus {
+  pending
+  approved
+  rejected
+
+  @@map("verification_status")
+}
+
+// ===========================================
+// ADMIN NOTES (Feature #73)
+// ===========================================
+
+model AdminNote {
+  id         Int      @id @default(autoincrement())
+  listingId  Int      @map("listing_id")
+  adminId    Int      @map("admin_id")
+  content    String
+  isInternal Boolean  @default(true) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  admin      User     @relation("AdminNotes", fields: [adminId], references: [id])
+
+  @@index([listingId])
+  @@index([adminId])
+  @@map("admin_notes")
+}
+
+// ===========================================
+// SYSTEM CONFIGURATION
+// ===========================================
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
