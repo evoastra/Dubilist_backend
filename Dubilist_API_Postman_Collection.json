@@ -1,0 +1,518 @@
+{
+  "info": {
+    "name": "Dubilist Marketplace API",
+    "description": "Complete API collection for Dubilist Marketplace Backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health",
+            "description": "Check if server is running"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "description": "Register a new user account"
+          }
+        },
+        {
+          "name": "Login User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"Password123\"\n}"
+            },
+            "description": "Login with email and password"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.tokens) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.tokens.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Admin",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@marketplace.com\",\n  \"password\": \"Admin@123456\"\n}"
+            },
+            "description": "Login as admin user"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.tokens) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.tokens.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login Test User",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"test@example.com\",\n  \"password\": \"Test@123456\"\n}"
+            },
+            "description": "Login as test user"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.tokens) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.tokens.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/auth/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Get currently logged in user details"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Get current user profile"
+          }
+        },
+        {
+          "name": "Update My Profile",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Updated\",\n  \"phone\": \"+971501234567\",\n  \"bio\": \"I love buying and selling on Dubilist!\"\n}"
+            },
+            "description": "Update current user profile"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Categories",
+      "item": [
+        {
+          "name": "Get All Categories",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Get all available categories"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Listings",
+      "item": [
+        {
+          "name": "Get All Listings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/listings?page=1&limit=20&status=approved",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "listings"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "status", "value": "approved" }
+              ]
+            },
+            "description": "Get all listings with optional filters"
+          }
+        },
+        {
+          "name": "Get Listings by Category",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/listings?categoryId=1",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "listings"],
+              "query": [
+                { "key": "categoryId", "value": "1" }
+              ]
+            },
+            "description": "Get listings filtered by category"
+          }
+        },
+        {
+          "name": "Get Listings by City",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/listings?city=Dubai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "listings"],
+              "query": [
+                { "key": "city", "value": "Dubai" }
+              ]
+            },
+            "description": "Get listings filtered by city"
+          }
+        },
+        {
+          "name": "Get Single Listing",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/listings/1",
+            "description": "Get a specific listing by ID"
+          }
+        },
+        {
+          "name": "Create Listing",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/listings",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Samsung Galaxy S24 Ultra\",\n  \"description\": \"Brand new Samsung Galaxy S24 Ultra, 256GB storage, Titanium Black color. Factory sealed, never opened. Comes with original warranty.\",\n  \"price\": 3999,\n  \"categoryId\": 1,\n  \"city\": \"Dubai\",\n  \"country\": \"UAE\",\n  \"contactPhone\": \"+971501234567\"\n}"
+            },
+            "description": "Create a new listing (requires authentication)"
+          }
+        },
+        {
+          "name": "Create Listing - Vehicle",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/listings",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Toyota Camry 2023 - Excellent Condition\",\n  \"description\": \"Toyota Camry 2023 model with only 15,000 km. Full service history, accident-free. Single owner, non-smoking. All features included.\",\n  \"price\": 95000,\n  \"categoryId\": 2,\n  \"city\": \"Abu Dhabi\",\n  \"country\": \"UAE\",\n  \"contactPhone\": \"+971509876543\"\n}"
+            },
+            "description": "Create a vehicle listing"
+          }
+        },
+        {
+          "name": "Create Listing - Property",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/listings",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"2BR Apartment for Rent - Dubai Marina\",\n  \"description\": \"Beautiful 2 bedroom apartment in Dubai Marina with full sea view. Fully furnished, modern kitchen, gym and pool access included. Close to metro station.\",\n  \"price\": 8500,\n  \"categoryId\": 3,\n  \"city\": \"Dubai\",\n  \"country\": \"UAE\",\n  \"contactPhone\": \"+971501112233\"\n}"
+            },
+            "description": "Create a property listing"
+          }
+        },
+        {
+          "name": "Update Listing",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/listings/1",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"iPhone 14 Pro Max - PRICE REDUCED!\",\n  \"price\": 4200\n}"
+            },
+            "description": "Update an existing listing"
+          }
+        },
+        {
+          "name": "Delete Listing",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/listings/1",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Delete a listing (soft delete)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Favorites",
+      "item": [
+        {
+          "name": "Get My Favorites",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/favorites",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Get all favorited listings"
+          }
+        },
+        {
+          "name": "Add to Favorites",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/favorites/1",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Add listing ID 1 to favorites"
+          }
+        },
+        {
+          "name": "Remove from Favorites",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/favorites/1",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Remove listing ID 1 from favorites"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Search",
+      "item": [
+        {
+          "name": "Search Listings",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=iphone",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "search"],
+              "query": [
+                { "key": "q", "value": "iphone" }
+              ]
+            },
+            "description": "Search listings by keyword"
+          }
+        },
+        {
+          "name": "Search with Filters",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/search?q=phone&categoryId=1&city=Dubai",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "search"],
+              "query": [
+                { "key": "q", "value": "phone" },
+                { "key": "categoryId", "value": "1" },
+                { "key": "city", "value": "Dubai" }
+              ]
+            },
+            "description": "Search with multiple filters"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Admin Login",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/admin/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@marketplace.com\",\n  \"password\": \"Admin@123456\"\n}"
+            },
+            "description": "Login as admin"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData.data && jsonData.data.tokens) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.tokens.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/admin/users",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "description": "Get all users (admin only)"
+          }
+        }
+      ]
+    }
+  ]
+}
