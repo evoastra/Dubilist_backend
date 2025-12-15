@@ -13,7 +13,7 @@ class CategoryService {
       include: {
         children: {
           where: { isActive: true },
-          orderBy: { sortOrder: 'asc' },
+          orderBy: { orderIndex: 'asc' },
         },
         _count: {
           select: {
@@ -21,7 +21,7 @@ class CategoryService {
           },
         },
       },
-      orderBy: { sortOrder: 'asc' },
+      orderBy: { orderIndex: 'asc' },
     });
 
     // Build tree structure
@@ -44,7 +44,7 @@ class CategoryService {
         parent: true,
         children: {
           where: { isActive: true },
-          orderBy: { sortOrder: 'asc' },
+          orderBy: { orderIndex: 'asc' },
         },
         _count: {
           select: {
@@ -66,7 +66,7 @@ class CategoryService {
 
   // Create category (admin)
   async createCategory(data) {
-    const { name, slug, description, iconUrl, parentId, sortOrder = 0 } = data;
+    const { name, slug, description, iconUrl, parentId, orderIndex = 0 } = data;
 
     // Check slug uniqueness
     const existing = await prisma.category.findUnique({
@@ -84,7 +84,7 @@ class CategoryService {
         description,
         iconUrl,
         parentId,
-        sortOrder,
+        orderIndex,
       },
     });
 

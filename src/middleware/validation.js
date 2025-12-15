@@ -95,7 +95,7 @@ const commonSchemas = {
 
   stringArray: Joi.array().items(Joi.string()),
 
-  sortOrder: Joi.string().valid('asc', 'desc').default('desc'),
+  orderIndex: Joi.string().valid('asc', 'desc').default('desc'),
 };
 
 module.exports = {

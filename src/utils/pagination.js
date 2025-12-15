@@ -40,7 +40,7 @@ const paginateResponse = (data, total, { page, limit }) => {
 // Parse sorting params
 const parseSorting = (query, allowedFields = [], defaultSort = 'createdAt', defaultOrder = 'desc') => {
   let sortBy = query.sortBy || query.sort || defaultSort;
-  let sortOrder = (query.sortOrder || query.order || defaultOrder).toLowerCase();
+  let orderIndex = (query.orderIndex || query.order || defaultOrder).toLowerCase();
 
   // Validate sort field
   if (allowedFields.length > 0 && !allowedFields.includes(sortBy)) {
@@ -48,19 +48,19 @@ const parseSorting = (query, allowedFields = [], defaultSort = 'createdAt', defa
   }
 
   // Validate sort order
-  if (!['asc', 'desc'].includes(sortOrder)) {
-    sortOrder = defaultOrder;
+  if (!['asc', 'desc'].includes(orderIndex)) {
+    orderIndex = defaultOrder;
   }
 
-  return { sortBy, sortOrder };
+  return { sortBy, orderIndex };
 };
 
 // Create Prisma orderBy object
-const createOrderBy = (sortBy, sortOrder) => {
+const createOrderBy = (sortBy, orderIndex) => {
   // Handle nested fields (e.g., 'user.name')
   if (sortBy.includes('.')) {
     const parts = sortBy.split('.');
-    let orderBy = { [parts[parts.length - 1]]: sortOrder };
+    let orderBy = { [parts[parts.length - 1]]: orderIndex };
     
     for (let i = parts.length - 2; i >= 0; i--) {
       orderBy = { [parts[i]]: orderBy };
@@ -69,7 +69,7 @@ const createOrderBy = (sortBy, sortOrder) => {
     return orderBy;
   }
 
-  return { [sortBy]: sortOrder };
+  return { [sortBy]: orderIndex };
 };
 
 // Parse cursor-based pagination
