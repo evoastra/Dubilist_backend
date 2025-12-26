@@ -463,18 +463,25 @@ app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
 // Get public user profile
 app.get('/api/users/:id', async (req, res) => {
   try {
+    const userId = parseInt(req.params.id);
+    
+    // Validate userId
+    if (isNaN(userId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { message: 'Invalid user ID' } 
+      });
+    }
+
     const user = await prisma.user.findUnique({
-      where: { id: parseInt(req.params.id) },
+      where: { id: userId },
       select: {
         id: true,
         name: true,
         avatarUrl: true,
         bio: true,
         isVerified: true,
-        createdAt: true,
-        _count: {
-          select: { listings: { where: { isDeleted: false, status: 'approved' } } }
-        }
+        createdAt: true
       }
     });
 
@@ -485,8 +492,14 @@ app.get('/api/users/:id', async (req, res) => {
       });
     }
 
-    res.json({ success: true, data: user });
+    // Get listing count separately
+    const listingCount = await prisma.listing.count({
+      where: { userId: userId, isDeleted: false, status: 'approved' }
+    });
+
+    res.json({ success: true, data: { ...user, listingCount } });
   } catch (error) {
+    console.error('Get public user error:', error);
     res.status(500).json({ 
       success: false, 
       error: { message: 'Failed to get user' } 
@@ -497,9 +510,19 @@ app.get('/api/users/:id', async (req, res) => {
 // Get user's public listings
 app.get('/api/users/:id/listings', async (req, res) => {
   try {
+    const userId = parseInt(req.params.id);
+    
+    // Validate userId
+    if (isNaN(userId)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: { message: 'Invalid user ID' } 
+      });
+    }
+
     const listings = await prisma.listing.findMany({
       where: { 
-        userId: parseInt(req.params.id),
+        userId: userId,
         isDeleted: false,
         status: 'approved'
       },
@@ -512,6 +535,7 @@ app.get('/api/users/:id/listings', async (req, res) => {
 
     res.json({ success: true, data: listings });
   } catch (error) {
+    console.error('Get user listings error:', error);
     res.status(500).json({ 
       success: false, 
       error: { message: 'Failed to get listings' } 
