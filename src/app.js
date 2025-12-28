@@ -11,12 +11,50 @@ const helmet = require('helmet');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { prisma, connectDatabase } = require('./config/database');
+const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const multer = require('multer');
 
 const app = express();
+
+// AWS S3 Configuration
+const s3Client = new S3Client({
+  region: process.env.AWS_REGION || 'eu-north-1',
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+  },
+});
+
+const S3_BUCKET = process.env.AWS_S3_BUCKET || 'dubilist-images';
+
+// Multer for file upload (memory storage)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type. Only JPEG, PNG, WebP, GIF allowed.'));
+    }
+  },
+});
+
+// Generate unique filename for S3
+const generateS3Key = (folder, originalName, userId) => {
+  const ext = originalName.split('.').pop();
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  return `${folder}/${userId}_${timestamp}_${random}.${ext}`;
+};
 
 // ===========================================
 // MIDDLEWARE
 // ===========================================
+
+
 
 app.use(helmet());
 app.use(cors({
@@ -120,7 +158,7 @@ const generateTokens = (userId) => {
   const accessToken = jwt.sign(
     { userId },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '15m' }
+    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || '24h' }
   );
 
   const refreshToken = jwt.sign(
@@ -152,6 +190,164 @@ app.get('/health', async (req, res) => {
     });
   }
 });
+app.post('/api/upload/image', authenticateToken, upload.single('image'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No image file provided' } });
+    }
+
+    const folder = req.body.folder || 'listings';
+    const s3Key = generateS3Key(folder, req.file.originalname, req.user.id);
+
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    });
+
+    await s3Client.send(command);
+
+    const imageUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+
+    res.status(201).json({
+      success: true,
+      message: 'Image uploaded successfully',
+      data: { url: imageUrl, s3Key: s3Key, size: req.file.size, mimetype: req.file.mimetype }
+    });
+  } catch (error) {
+    console.error('S3 upload error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to upload image' } });
+  }
+});
+
+// Upload multiple images to S3
+app.post('/api/upload/images', authenticateToken, upload.array('images', 10), async (req, res) => {
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'No image files provided' } });
+    }
+
+    const folder = req.body.folder || 'listings';
+    const uploadedImages = [];
+
+    for (const file of req.files) {
+      const s3Key = generateS3Key(folder, file.originalname, req.user.id);
+
+      const command = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      });
+
+      await s3Client.send(command);
+
+      const imageUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+      uploadedImages.push({ url: imageUrl, s3Key: s3Key, size: file.size, mimetype: file.mimetype });
+    }
+
+    res.status(201).json({
+      success: true,
+      message: `${uploadedImages.length} images uploaded successfully`,
+      data: uploadedImages
+    });
+  } catch (error) {
+    console.error('S3 upload error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to upload images' } });
+  }
+});
+
+// Delete image from S3
+app.delete('/api/upload/:s3Key(*)', authenticateToken, async (req, res) => {
+  try {
+    const s3Key = req.params.s3Key;
+    if (!s3Key) {
+      return res.status(400).json({ success: false, error: { message: 'S3 key is required' } });
+    }
+
+    const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: s3Key });
+    await s3Client.send(command);
+
+    res.json({ success: true, message: 'Image deleted successfully' });
+  } catch (error) {
+    console.error('S3 delete error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to delete image' } });
+  }
+});
+
+// Get presigned URL for direct upload
+app.post('/api/upload/presigned-url', authenticateToken, async (req, res) => {
+  try {
+    const { filename, contentType, folder = 'listings' } = req.body;
+
+    if (!filename || !contentType) {
+      return res.status(400).json({ success: false, error: { message: 'Filename and contentType are required' } });
+    }
+
+    const s3Key = generateS3Key(folder, filename, req.user.id);
+
+    const command = new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      ContentType: contentType,
+    });
+
+    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+    const imageUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+
+    res.json({ success: true, data: { presignedUrl, s3Key, imageUrl } });
+  } catch (error) {
+    console.error('Presigned URL error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to generate presigned URL' } });
+  }
+});
+
+// Upload category image
+app.post('/api/admin/categories/:id/image', authenticateToken, requireAdmin, upload.single('image'), async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: { message: 'No image file provided' } });
+    }
+
+    const category = await prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category) {
+      return res.status(404).json({ success: false, error: { message: 'Category not found' } });
+    }
+
+    // Delete old image if exists
+    if (category.s3Key) {
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: category.s3Key }));
+      } catch (e) { console.error('Failed to delete old category image:', e); }
+    }
+
+    const s3Key = generateS3Key('categories', req.file.originalname, req.user.id);
+    await s3Client.send(new PutObjectCommand({
+      Bucket: S3_BUCKET,
+      Key: s3Key,
+      Body: req.file.buffer,
+      ContentType: req.file.mimetype,
+    }));
+
+    const imageUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+
+    const updated = await prisma.category.update({
+      where: { id: categoryId },
+      data: { imageUrl, s3Key }
+    });
+
+    res.json({ success: true, message: 'Category image updated', data: updated });
+  } catch (error) {
+    console.error('Upload category image error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to upload image' } });
+  }
+});
+
+
+// ============================================================
+
 
 // ===========================================
 // AUTH ROUTES
@@ -619,6 +815,48 @@ app.get('/api/categories/slug/:slug', async (req, res) => {
   }
 });
 
+app.get('/api/categories/:id/attributes', async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    if (isNaN(categoryId)) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid category ID' } });
+    }
+
+    const attributes = await prisma.categoryAttribute.findMany({
+      where: { categoryId, isActive: true },
+      orderBy: { orderIndex: 'asc' }
+    });
+
+    res.json({ success: true, data: attributes });
+  } catch (error) {
+    console.error('Get category attributes error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to get attributes' } });
+  }
+});
+
+// Get filterable attributes for search
+app.get('/api/categories/:id/filters', async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    if (isNaN(categoryId)) {
+      return res.status(400).json({ success: false, error: { message: 'Invalid category ID' } });
+    }
+
+    const attributes = await prisma.categoryAttribute.findMany({
+      where: { categoryId, isActive: true, isFilterable: true },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, name: true, label: true, type: true, options: true }
+    });
+
+    res.json({ success: true, data: attributes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: 'Failed to get filters' } });
+  }
+});
+
+
+
+
 // ===========================================
 // LISTING ROUTES
 // ===========================================
@@ -1047,41 +1285,38 @@ app.delete('/api/listings/:id/images/:imageId', authenticateToken, async (req, r
     const listingId = parseInt(req.params.id);
     const imageId = parseInt(req.params.imageId);
 
-    // Validate IDs
     if (isNaN(listingId) || isNaN(imageId)) {
-      return res.status(400).json({ 
-        success: false, 
-        error: { message: 'Invalid listing ID or image ID' } 
-      });
+      return res.status(400).json({ success: false, error: { message: 'Invalid listing ID or image ID' } });
     }
 
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-
     if (!listing) {
-      return res.status(404).json({ 
-        success: false, 
-        error: { message: 'Listing not found' } 
-      });
+      return res.status(404).json({ success: false, error: { message: 'Listing not found' } });
     }
 
     if (listing.userId !== req.user.id && req.user.role.name !== 'admin') {
-      return res.status(403).json({ 
-        success: false, 
-        error: { message: 'Not authorized' } 
-      });
+      return res.status(403).json({ success: false, error: { message: 'Not authorized' } });
+    }
+
+    // Get image to delete from S3
+    const image = await prisma.listingImage.findUnique({ where: { id: imageId } });
+    if (image && image.s3Key) {
+      try {
+        const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: image.s3Key });
+        await s3Client.send(command);
+      } catch (s3Error) {
+        console.error('S3 delete error:', s3Error);
+      }
     }
 
     await prisma.listingImage.delete({ where: { id: imageId } });
 
     res.json({ success: true, message: 'Image deleted' });
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      error: { message: 'Failed to delete image' } 
-    });
+    res.status(500).json({ success: false, error: { message: 'Failed to delete image' } });
   }
 });
-
+  
 // ===========================================
 // FAVORITES ROUTES
 // ===========================================
@@ -2672,6 +2907,101 @@ app.post('/api/admin/categories', authenticateToken, requireAdmin, async (req, r
     });
   }
 });
+app.get('/api/admin/attributes', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { categoryId } = req.query;
+    const where = categoryId ? { categoryId: parseInt(categoryId) } : {};
+
+    const attributes = await prisma.categoryAttribute.findMany({
+      where,
+      include: { category: { select: { id: true, name: true } } },
+      orderBy: [{ categoryId: 'asc' }, { orderIndex: 'asc' }]
+    });
+
+    res.json({ success: true, data: attributes });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: 'Failed to get attributes' } });
+  }
+});
+
+// Create attribute for category (admin)
+app.post('/api/admin/categories/:id/attributes', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const categoryId = parseInt(req.params.id);
+    const { name, label, type = 'text', options, isRequired = false, isFilterable = false, orderIndex = 0, placeholder, helpText } = req.body;
+
+    if (!name || !label) {
+      return res.status(400).json({ success: false, error: { message: 'Name and label are required' } });
+    }
+
+    const category = await prisma.category.findUnique({ where: { id: categoryId } });
+    if (!category) {
+      return res.status(404).json({ success: false, error: { message: 'Category not found' } });
+    }
+
+    const attribute = await prisma.categoryAttribute.create({
+      data: {
+        categoryId,
+        name: name.toLowerCase().replace(/\s+/g, '_'),
+        label,
+        type,
+        options: options || null,
+        isRequired,
+        isFilterable,
+        orderIndex,
+        placeholder,
+        helpText
+      }
+    });
+
+    res.status(201).json({ success: true, message: 'Attribute created', data: attribute });
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ success: false, error: { message: 'Attribute already exists for this category' } });
+    }
+    console.error('Create attribute error:', error);
+    res.status(500).json({ success: false, error: { message: 'Failed to create attribute' } });
+  }
+});
+
+// Update attribute (admin)
+app.put('/api/admin/attributes/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const attributeId = parseInt(req.params.id);
+    const { label, type, options, isRequired, isFilterable, orderIndex, placeholder, helpText, isActive } = req.body;
+
+    const attribute = await prisma.categoryAttribute.update({
+      where: { id: attributeId },
+      data: {
+        ...(label && { label }),
+        ...(type && { type }),
+        ...(options !== undefined && { options }),
+        ...(isRequired !== undefined && { isRequired }),
+        ...(isFilterable !== undefined && { isFilterable }),
+        ...(orderIndex !== undefined && { orderIndex }),
+        ...(placeholder !== undefined && { placeholder }),
+        ...(helpText !== undefined && { helpText }),
+        ...(isActive !== undefined && { isActive })
+      }
+    });
+
+    res.json({ success: true, message: 'Attribute updated', data: attribute });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: 'Failed to update attribute' } });
+  }
+});
+
+// Delete attribute (admin)
+app.delete('/api/admin/attributes/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    await prisma.categoryAttribute.delete({ where: { id: parseInt(req.params.id) } });
+    res.json({ success: true, message: 'Attribute deleted' });
+  } catch (error) {
+    res.status(500).json({ success: false, error: { message: 'Failed to delete attribute' } });
+  }
+});
+
+
 
 app.put('/api/admin/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -2863,6 +3193,7 @@ const validateMessage = (content) => {
     }
   }
 
+
   // Sanitize HTML
   const sanitized = trimmed
     .replace(/</g, '&lt;')
@@ -2872,6 +3203,7 @@ const validateMessage = (content) => {
 
   return { valid: true, content: sanitized };
 };
+
 
 // ===========================================
 // SOCKET CONNECTION HANDLER
