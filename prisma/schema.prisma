@@ -304,7 +304,6 @@ model ListingAttributeValue {
   @@unique([listingId, attributeId])
   @@index([listingId])
   @@index([attributeId])
-  @@index([valueText])
   @@index([valueNumber])
   @@map("listing_attribute_values")
 }
@@ -651,13 +650,13 @@ model FraudLog {
 model SearchLog {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")
-  query     String
+  query     String   @db.VarChar(500)
   filters   Json?
   resultsCount Int   @default(0) @map("results_count")
   ipAddress String?  @map("ip_address")
   createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([query])
+  @@index([query(length: 255)])
   @@index([createdAt])
   @@map("search_logs")
 }
