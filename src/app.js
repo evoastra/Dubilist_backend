@@ -1020,30 +1020,43 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
     }
 
     const listing = await prisma.listing.create({
-      data: {
-        title,
-        description,
-        price: parseFloat(price),
-        categoryId: parseInt(categoryId),
-        userId: req.user.id,
-        city,
-        country,
-        address,
-        latitude: latitude ? parseFloat(latitude) : null,
-        longitude: longitude ? parseFloat(longitude) : null,
-        contactPhone: contactPhone || req.user.phone,
-        contactEmail: contactEmail || req.user.email,
-        isNegotiable: isNegotiable !== false,
-        condition,
-        attributes: attributes ? JSON.parse(JSON.stringify(attributes)) : null,
-        status,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000) // 30 days
-      },
-      include: {
-        category: true,
-        user: { select: { id: true, name: true } }
-      }
-    });
+  data: {
+    title,
+    description,
+    price: parseFloat(price),
+    categoryId: parseInt(categoryId),
+    userId: req.user.id,
+    city,
+    country,
+    address,
+    latitude: latitude ? parseFloat(latitude) : null,
+    longitude: longitude ? parseFloat(longitude) : null,
+    contactPhone: contactPhone || req.user.phone,
+    contactEmail: contactEmail || req.user.email,
+    isNegotiable: isNegotiable !== false,
+    condition,
+    status,
+    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+  },
+  include: {
+    category: true,
+    user: { select: { id: true, name: true } }
+  }
+});
+
+if (Array.isArray(attributes) && attributes.length > 0) {
+  await prisma.listingAttributeValue.createMany({
+    data: attributes.map(attr => ({
+      listingId: listing.id,
+      attributeId: attr.attributeId,
+      valueText: attr.valueText ?? null,
+      valueNumber: attr.valueNumber ?? null,
+      valueBoolean: attr.valueBoolean ?? null,
+      valueJson: attr.valueJson ?? null
+    }))
+  });
+}
+
 
     // Update user's last listing posted
     await prisma.user.update({
@@ -1119,7 +1132,7 @@ app.put('/api/listings/:id', authenticateToken, async (req, res) => {
         ...(contactEmail !== undefined && { contactEmail }),
         ...(isNegotiable !== undefined && { isNegotiable }),
         ...(condition !== undefined && { condition }),
-        ...(attributes !== undefined && { attributes }),
+       
         ...(status && { status }),
       },
       include: { category: true }
