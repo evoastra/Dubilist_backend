@@ -56,11 +56,13 @@ const generateS3Key = (folder, originalName, userId) => {
 
 
 
-app.use(helmet());
+app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || '*',
+  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
   credentials: true,
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -262,10 +264,12 @@ app.post('/api/upload/images', authenticateToken, upload.array('images', 10), as
 app.delete('/api/upload/:s3Key(*)', authenticateToken, async (req, res) => {
   try {
     const s3Key = req.params.s3Key;
-    if (!s3Key) {
-      return res.status(400).json({ success: false, error: { message: 'S3 key is required' } });
-    }
-
+  if (!s3Key.startsWith(`listings/${req.user.id}_`) && !s3Key.startsWith(`categories/${req.user.id}_`)) {
+  return res.status(403).json({
+    success: false,
+    error: { message: 'Not allowed to delete this file' }
+  });
+}
     const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: s3Key });
     await s3Client.send(command);
 
@@ -720,7 +724,7 @@ app.get('/api/users/:id/listings', async (req, res) => {
       where: { 
         userId: userId,
         isDeleted: false,
-        status: 'approved'
+         status: { in: ['draft', 'pending', 'approved', 'rejected', 'sold'] }
       },
       include: {
         category: true,
@@ -815,48 +819,6 @@ app.get('/api/categories/slug/:slug', async (req, res) => {
   }
 });
 
-app.get('/api/categories/:id/attributes', async (req, res) => {
-  try {
-    const categoryId = parseInt(req.params.id);
-    if (isNaN(categoryId)) {
-      return res.status(400).json({ success: false, error: { message: 'Invalid category ID' } });
-    }
-
-    const attributes = await prisma.categoryAttribute.findMany({
-      where: { categoryId, isActive: true },
-      orderBy: { orderIndex: 'asc' }
-    });
-
-    res.json({ success: true, data: attributes });
-  } catch (error) {
-    console.error('Get category attributes error:', error);
-    res.status(500).json({ success: false, error: { message: 'Failed to get attributes' } });
-  }
-});
-
-// Get filterable attributes for search
-app.get('/api/categories/:id/filters', async (req, res) => {
-  try {
-    const categoryId = parseInt(req.params.id);
-    if (isNaN(categoryId)) {
-      return res.status(400).json({ success: false, error: { message: 'Invalid category ID' } });
-    }
-
-    const attributes = await prisma.categoryAttribute.findMany({
-      where: { categoryId, isActive: true, isFilterable: true },
-      orderBy: { orderIndex: 'asc' },
-      select: { id: true, name: true, label: true, type: true, options: true }
-    });
-
-    res.json({ success: true, data: attributes });
-  } catch (error) {
-    res.status(500).json({ success: false, error: { message: 'Failed to get filters' } });
-  }
-});
-
-
-
-
 // ===========================================
 // LISTING ROUTES
 // ===========================================
@@ -864,35 +826,72 @@ app.get('/api/categories/:id/filters', async (req, res) => {
 // Get all listings
 app.get('/api/listings', async (req, res) => {
   try {
-    const { 
-      page = 1, 
-      limit = 20, 
-      status = 'approved',
-      categoryId, 
-      city, 
-      minPrice, 
-      maxPrice,
-      condition,
-      sort = 'newest'
-    } = req.query;
+    const page = clamp(toInt(req.query.page) ?? 1, 1, 100000);
+    const limit = clamp(toInt(req.query.limit) ?? 20, 1, 50);
 
+    const categoryId = toInt(req.query.categoryId);
+    const city = cleanStr(req.query.city, 60);
+
+    const minPrice = toFloat(req.query.minPrice);
+    const maxPrice = toFloat(req.query.maxPrice);
+
+    const condition = cleanStr(req.query.condition, 50);
+    const brand = cleanStr(req.query.brand, 60);
+    const make = cleanStr(req.query.make, 60);
+    const year = toInt(req.query.year);
+
+    // ✅ allowlist sort (prevents weird values / mistakes)
+    const sort = cleanStr(req.query.sort, 30) ?? 'newest';
+    const SORTS = new Set(['newest', 'oldest', 'price_low', 'price_high', 'popular']);
+    const safeSort = SORTS.has(sort) ? sort : 'newest';
+
+    // ✅ base where
     const where = {
       isDeleted: false,
-      ...(status && { status }),
-      ...(categoryId && { categoryId: parseInt(categoryId) }),
-      ...(city && { city: { contains: city } }),
-      ...(condition && { condition }),
-      ...(minPrice && { price: { gte: parseFloat(minPrice) } }),
-      ...(maxPrice && { price: { lte: parseFloat(maxPrice) } }),
+      status: 'approved', // ✅ force public only
+      ...(categoryId ? { categoryId } : {}),
+      ...(city ? { city: { contains: city, mode: 'insensitive' } } : {}),
+      ...(minPrice !== undefined || maxPrice !== undefined
+        ? {
+            price: {
+              ...(minPrice !== undefined ? { gte: minPrice } : {}),
+              ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+            },
+          }
+        : {}),
     };
 
-    const orderBy = sort === 'price_low' ? { price: 'asc' } :
-                    sort === 'price_high' ? { price: 'desc' } :
-                    sort === 'oldest' ? { createdAt: 'asc' } :
-                    sort === 'popular' ? { viewsCount: 'desc' } :
-                    { createdAt: 'desc' };
+    // ✅ category-specific filters (same logic, but using parsed int)
+    if (categoryId === CATEGORY.MOTORS) {
+      where.motorDetails = {
+        ...(condition ? { condition } : {}),
+        ...(make ? { make } : {}),
+        ...(year ? { year } : {}),
+      };
+    }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    if (categoryId === CATEGORY.ELECTRONICS) {
+      where.electronicDetails = {
+        ...(condition ? { condition } : {}),
+        ...(brand ? { brand } : {}),
+      };
+    }
+
+    if (categoryId === CATEGORY.FURNITURE) {
+      where.furnitureDetails = {
+        ...(condition ? { condition } : {}),
+      };
+    }
+
+    // ✅ orderBy
+    const orderBy =
+      safeSort === 'price_low' ? { price: 'asc' } :
+      safeSort === 'price_high' ? { price: 'desc' } :
+      safeSort === 'oldest' ? { createdAt: 'asc' } :
+      safeSort === 'popular' ? { viewsCount: 'desc' } :
+      { createdAt: 'desc' };
+
+    const skip = (page - 1) * limit;
 
     const [listings, total] = await Promise.all([
       prisma.listing.findMany({
@@ -900,33 +899,41 @@ app.get('/api/listings', async (req, res) => {
         include: {
           user: { select: { id: true, name: true, avatarUrl: true } },
           category: { select: { id: true, name: true, slug: true } },
-          images: { take: 1, orderBy: { orderIndex: 'asc' } }
+          images: { take: 1, orderBy: { orderIndex: 'asc' } },
+
+          // ✅ keep same response keys, but SELECT only needed fields (faster than true)
+          motorDetails: { select: { condition: true, make: true, year: true } },
+          electronicDetails: { select: { condition: true, brand: true } },
+          furnitureDetails: { select: { condition: true } },
         },
         orderBy,
         skip,
-        take: parseInt(limit)
+        take: limit,
       }),
-      prisma.listing.count({ where })
+      prisma.listing.count({ where }),
     ]);
 
     res.json({
       success: true,
       data: listings,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page,
+        limit,
         total,
-        pages: Math.ceil(total / parseInt(limit))
-      }
+        pages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
     console.error('Get listings error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { message: 'Failed to get listings' } 
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to get listings' },
     });
   }
 });
+
+
+
 
 // Get single listing
 app.get('/api/listings/:id', optionalAuth, async (req, res) => {
@@ -997,6 +1004,11 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
       contactEmail,
       isNegotiable,
       condition,
+      make,
+      model,
+      year,
+      subCategory,
+      brand,
       attributes,
       status = 'draft'
     } = req.body;
@@ -1018,44 +1030,78 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
         error: { message: 'Invalid category' } 
       });
     }
-
-    const listing = await prisma.listing.create({
-  data: {
-    title,
-    description,
-    price: parseFloat(price),
-    categoryId: parseInt(categoryId),
-    userId: req.user.id,
-    city,
-    country,
-    address,
-    latitude: latitude ? parseFloat(latitude) : null,
-    longitude: longitude ? parseFloat(longitude) : null,
-    contactPhone: contactPhone || req.user.phone,
-    contactEmail: contactEmail || req.user.email,
-    isNegotiable: isNegotiable !== false,
-    condition,
-    status,
-    expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
-  },
-  include: {
-    category: true,
-    user: { select: { id: true, name: true } }
-  }
-});
-
-if (Array.isArray(attributes) && attributes.length > 0) {
-  await prisma.listingAttributeValue.createMany({
-    data: attributes.map(attr => ({
-      listingId: listing.id,
-      attributeId: attr.attributeId,
-      valueText: attr.valueText ?? null,
-      valueNumber: attr.valueNumber ?? null,
-      valueBoolean: attr.valueBoolean ?? null,
-      valueJson: attr.valueJson ?? null
-    }))
+    // 🔴 CONDITION VALIDATION (CATEGORY-WISE)
+// Motors (1), Electronics (5), Furniture (6) REQUIRE condition
+if ([1, 5, 6].includes(parseInt(categoryId)) && !condition) {
+  return res.status(400).json({
+    success: false,
+    error: { message: 'Condition is required for this category' }
   });
 }
+
+
+const listing = await prisma.$transaction(async (tx) => {
+  const baseListing = await tx.listing.create({
+    data: {
+      title,
+      description,
+      
+      price: parseFloat(price),
+      categoryId: parseInt(categoryId),
+      userId: req.user.id,
+      city,
+      country,
+      address,
+      latitude: latitude ? parseFloat(latitude) : null,
+      longitude: longitude ? parseFloat(longitude) : null,
+      contactPhone: contactPhone || req.user.phone,
+      contactEmail: contactEmail || req.user.email,
+      isNegotiable: isNegotiable !== false,
+      status,
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+    }
+  });
+
+  // 🔥 CREATE CATEGORY DETAIL
+  if (categoryId == 1) {
+    await tx.motorListing.create({
+      data: {
+      listingId: baseListing.id,
+      make: make || 'Unknown',
+      model: model || 'Unknown',
+      year: year || new Date().getFullYear(),
+      condition
+    }
+    });
+  }
+
+  if (categoryId == 5) {
+    await tx.electronicListing.create({
+      data: {
+      listingId: baseListing.id,
+      condition,
+      brand: brand || 'Unknown',  // ← ADD THIS
+      model: model || 'Unknown',  // ← ADD THIS
+      subCategory: subCategory || 'Other'  // ← ADD THIS
+    }
+    });
+  }
+
+  if (categoryId == 6) {
+    await tx.furnitureListing.create({
+       data: {
+      listingId: baseListing.id,
+      condition,
+      subCategory: subCategory || 'Other'  // ← ADD THIS
+    }
+    });
+  }
+
+  return baseListing;
+});
+
+
+
 
 
     // Update user's last listing posted
@@ -1115,14 +1161,25 @@ app.put('/api/listings/:id', authenticateToken, async (req, res) => {
       isNegotiable,
       condition,
       attributes,
+      make,
+      subCategory,
+      model,
+      year,
       status
     } = req.body;
-
+    // 🔁 If category changed, remove old category details
+if (categoryId && parseInt(categoryId) !== listing.categoryId) {
+  await prisma.motorListing.deleteMany({ where: { listingId } });
+  await prisma.electronicListing.deleteMany({ where: { listingId } });
+  await prisma.furnitureListing.deleteMany({ where: { listingId } });
+}
     const updated = await prisma.listing.update({
       where: { id: listingId },
       data: {
         ...(title && { title }),
         ...(description && { description }),
+        
+
         ...(price !== undefined && { price: parseFloat(price) }),
         ...(categoryId && { categoryId: parseInt(categoryId) }),
         ...(city !== undefined && { city }),
@@ -1131,12 +1188,43 @@ app.put('/api/listings/:id', authenticateToken, async (req, res) => {
         ...(contactPhone !== undefined && { contactPhone }),
         ...(contactEmail !== undefined && { contactEmail }),
         ...(isNegotiable !== undefined && { isNegotiable }),
-        ...(condition !== undefined && { condition }),
+       
        
         ...(status && { status }),
       },
       include: { category: true }
     });
+
+
+
+// 🔧 Update category-specific condition
+const finalCategoryId = updated.categoryId;
+
+if (finalCategoryId == 1 && condition) {
+  await prisma.motorListing.upsert({
+    where: { listingId },
+    update: { condition },
+    create: { listingId, condition }
+  });
+}
+
+if (finalCategoryId == 5 && condition) {
+  await prisma.electronicListing.upsert({
+    where: { listingId },
+    update: { condition },
+    create: { listingId, condition }
+  });
+}
+
+if (finalCategoryId == 6 && condition) {
+  await prisma.furnitureListing.upsert({
+    where: { listingId },
+    update: { condition },
+    create: { listingId, condition }
+  });
+}
+
+
 
     res.json({
       success: true,
@@ -1174,6 +1262,7 @@ app.delete('/api/listings/:id', authenticateToken, async (req, res) => {
         error: { message: 'Not authorized to delete this listing' } 
       });
     }
+
 
     // Soft delete
     await prisma.listing.update({
@@ -1515,32 +1604,117 @@ app.delete('/api/recently-viewed', authenticateToken, async (req, res) => {
 
 app.get('/api/search', async (req, res) => {
   try {
-    const { 
-      q = '', 
-      categoryId, 
-      city, 
-      minPrice, 
+    const {
+      q = '',
+      categoryId,
+      city,
+      cityMatch = 'contains', // ✅ contains | startsWith | exact
+      minPrice,
       maxPrice,
+
+      // ✅ add these
       condition,
-      page = 1, 
-      limit = 20 
+      make,
+      brand,
+      year,
+
+      page = 1,
+      limit = 20
     } = req.query;
 
-    const where = {
-      isDeleted: false,
-      status: 'approved',
-      OR: q ? [
-        { title: { contains: q } },
-        { description: { contains: q } }
-      ] : undefined,
-      ...(categoryId && { categoryId: parseInt(categoryId) }),
-      ...(city && { city: { contains: city } }),
-      ...(condition && { condition }),
-      ...(minPrice && { price: { gte: parseFloat(minPrice) } }),
-      ...(maxPrice && { price: { lte: parseFloat(maxPrice) } }),
-    };
+    const parsedCategoryId = categoryId ? parseInt(categoryId, 10) : null;
+    const parsedPage = parseInt(page, 10) || 1;
+    const parsedLimit = parseInt(limit, 10) || 20;
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    // ✅ FIX: price filter (no overwrite)
+    const priceFilter = {};
+    if (minPrice !== undefined && minPrice !== '') priceFilter.gte = parseFloat(minPrice);
+    if (maxPrice !== undefined && maxPrice !== '') priceFilter.lte = parseFloat(maxPrice);
+
+    // ✅ city filter modes
+    let cityFilter;
+    if (city) {
+      if (cityMatch === 'exact') cityFilter = { equals: city };
+      else if (cityMatch === 'startsWith') cityFilter = { startsWith: city };
+      else cityFilter = { contains: city };
+    }
+
+    // Build where using AND so OR filters don’t break each other
+    const andFilters = [];
+
+    // ✅ SAFE: public search only approved
+    andFilters.push({ status: 'approved' });
+    andFilters.push({ isDeleted: false });
+
+    if (q) {
+      andFilters.push({
+        OR: [
+          { title: { contains: q } },
+          { description: { contains: q } }
+        ]
+      });
+    }
+
+    if (parsedCategoryId) andFilters.push({ categoryId: parsedCategoryId });
+    if (cityFilter) andFilters.push({ city: cityFilter });
+    if (Object.keys(priceFilter).length) andFilters.push({ price: priceFilter });
+
+    // ==========================
+    // category detail filters
+    // ==========================
+    if (parsedCategoryId) {
+      // If category chosen, apply filters only to that category detail table
+      if (parsedCategoryId === 1) {
+        andFilters.push({
+          motorDetails: {
+            ...(condition ? { condition } : {}),
+            ...(make ? { make } : {}),
+            ...(year ? { year: parseInt(year, 10) } : {})
+          }
+        });
+      }
+
+      if (parsedCategoryId === 5) {
+        andFilters.push({
+          electronicDetails: {
+            ...(condition ? { condition } : {}),
+            ...(brand ? { brand } : {})
+          }
+        });
+      }
+
+      if (parsedCategoryId === 6) {
+        andFilters.push({
+          furnitureDetails: {
+            ...(condition ? { condition } : {})
+          }
+        });
+      }
+    } else {
+      // If NO categoryId, apply them as OR across known detail tables
+      const detailOr = [];
+
+      if (condition) {
+        detailOr.push({ motorDetails: { condition } });
+        detailOr.push({ electronicDetails: { condition } });
+        detailOr.push({ furnitureDetails: { condition } });
+      }
+      if (make) {
+        detailOr.push({ motorDetails: { make } });
+      }
+      if (year) {
+        detailOr.push({ motorDetails: { year: parseInt(year, 10) } });
+      }
+      if (brand) {
+        detailOr.push({ electronicDetails: { brand } });
+      }
+
+      if (detailOr.length) andFilters.push({ OR: detailOr });
+    }
+
+    const where = { AND: andFilters };
+
+    const skip = (parsedPage - 1) * parsedLimit;
 
     const [listings, total] = await Promise.all([
       prisma.listing.findMany({
@@ -1552,7 +1726,7 @@ app.get('/api/search', async (req, res) => {
         },
         orderBy: { createdAt: 'desc' },
         skip,
-        take: parseInt(limit)
+        take: parsedLimit
       }),
       prisma.listing.count({ where })
     ]);
@@ -1561,29 +1735,32 @@ app.get('/api/search', async (req, res) => {
     await prisma.searchLog.create({
       data: {
         query: q || '',
-        filters: { categoryId, city, minPrice, maxPrice, condition },
+        filters: { categoryId, city, cityMatch, minPrice, maxPrice, condition, make, brand, year },
         resultsCount: total
       }
-    }).catch(() => {}); // Ignore errors
+    }).catch(() => {});
 
     res.json({
       success: true,
       data: listings,
       pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
+        page: parsedPage,
+        limit: parsedLimit,
         total,
-        pages: Math.ceil(total / parseInt(limit))
+        pages: Math.ceil(total / parsedLimit)
       }
     });
   } catch (error) {
     console.error('Search error:', error);
-    res.status(500).json({ 
-      success: false, 
-      error: { message: 'Search failed' } 
+    res.status(500).json({
+      success: false,
+      error: { message: 'Search failed' }
     });
   }
 });
+
+
+
 
 // ===========================================
 // REPORT ROUTES
@@ -2920,101 +3097,6 @@ app.post('/api/admin/categories', authenticateToken, requireAdmin, async (req, r
     });
   }
 });
-app.get('/api/admin/attributes', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const { categoryId } = req.query;
-    const where = categoryId ? { categoryId: parseInt(categoryId) } : {};
-
-    const attributes = await prisma.categoryAttribute.findMany({
-      where,
-      include: { category: { select: { id: true, name: true } } },
-      orderBy: [{ categoryId: 'asc' }, { orderIndex: 'asc' }]
-    });
-
-    res.json({ success: true, data: attributes });
-  } catch (error) {
-    res.status(500).json({ success: false, error: { message: 'Failed to get attributes' } });
-  }
-});
-
-// Create attribute for category (admin)
-app.post('/api/admin/categories/:id/attributes', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const categoryId = parseInt(req.params.id);
-    const { name, label, type = 'text', options, isRequired = false, isFilterable = false, orderIndex = 0, placeholder, helpText } = req.body;
-
-    if (!name || !label) {
-      return res.status(400).json({ success: false, error: { message: 'Name and label are required' } });
-    }
-
-    const category = await prisma.category.findUnique({ where: { id: categoryId } });
-    if (!category) {
-      return res.status(404).json({ success: false, error: { message: 'Category not found' } });
-    }
-
-    const attribute = await prisma.categoryAttribute.create({
-      data: {
-        categoryId,
-        name: name.toLowerCase().replace(/\s+/g, '_'),
-        label,
-        type,
-        options: options || null,
-        isRequired,
-        isFilterable,
-        orderIndex,
-        placeholder,
-        helpText
-      }
-    });
-
-    res.status(201).json({ success: true, message: 'Attribute created', data: attribute });
-  } catch (error) {
-    if (error.code === 'P2002') {
-      return res.status(409).json({ success: false, error: { message: 'Attribute already exists for this category' } });
-    }
-    console.error('Create attribute error:', error);
-    res.status(500).json({ success: false, error: { message: 'Failed to create attribute' } });
-  }
-});
-
-// Update attribute (admin)
-app.put('/api/admin/attributes/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    const attributeId = parseInt(req.params.id);
-    const { label, type, options, isRequired, isFilterable, orderIndex, placeholder, helpText, isActive } = req.body;
-
-    const attribute = await prisma.categoryAttribute.update({
-      where: { id: attributeId },
-      data: {
-        ...(label && { label }),
-        ...(type && { type }),
-        ...(options !== undefined && { options }),
-        ...(isRequired !== undefined && { isRequired }),
-        ...(isFilterable !== undefined && { isFilterable }),
-        ...(orderIndex !== undefined && { orderIndex }),
-        ...(placeholder !== undefined && { placeholder }),
-        ...(helpText !== undefined && { helpText }),
-        ...(isActive !== undefined && { isActive })
-      }
-    });
-
-    res.json({ success: true, message: 'Attribute updated', data: attribute });
-  } catch (error) {
-    res.status(500).json({ success: false, error: { message: 'Failed to update attribute' } });
-  }
-});
-
-// Delete attribute (admin)
-app.delete('/api/admin/attributes/:id', authenticateToken, requireAdmin, async (req, res) => {
-  try {
-    await prisma.categoryAttribute.delete({ where: { id: parseInt(req.params.id) } });
-    res.json({ success: true, message: 'Attribute deleted' });
-  } catch (error) {
-    res.status(500).json({ success: false, error: { message: 'Failed to delete attribute' } });
-  }
-});
-
-
 
 app.put('/api/admin/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
   try {
@@ -3103,7 +3185,8 @@ app.use((err, req, res, next) => {
   });
 });
 
-module.exports = app;
+
+
 
 // ===========================================
 // SOCKET.IO SECURE CHAT
@@ -3116,12 +3199,13 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN?.split(',') || '*',
+    origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:3000'],
     credentials: true
   },
   pingTimeout: 60000,
   pingInterval: 25000
 });
+
 
 // Connected users map
 const connectedUsers = new Map();
@@ -3198,6 +3282,7 @@ const validateMessage = (content) => {
     'fuck', 'shit', 'ass', 'bitch', 'bastard', 'dick', 'pussy', 
     'cock', 'cunt', 'whore', 'slut', 'nigger', 'faggot', 'damn'
   ];
+
 
   const lowerContent = trimmed.toLowerCase();
   for (const word of vulgarWords) {
@@ -3353,3 +3438,4 @@ io.on('connection', (socket) => {
 
 // Export server with socket
 module.exports = { app, server, io };
+
