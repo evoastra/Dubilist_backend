@@ -198,6 +198,7 @@ enum ListingStatus {
   rejected
   sold
   expired
+  completed
 
   @@map("listing_status")
 }

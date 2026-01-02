@@ -50,6 +50,39 @@ const generateS3Key = (folder, originalName, userId) => {
   return `${folder}/${userId}_${timestamp}_${random}.${ext}`;
 };
 
+
+// After generateS3Key function, add:
+
+const CATEGORY = {
+  MOTORS: 1,
+  JOBS: 2,
+  PROPERTY: 3,
+  CLASSIFIEDS: 4,
+  ELECTRONICS: 5,
+  FURNITURE: 6
+};
+
+const VALID_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'sold', 'expired'];
+
+const cleanStr = (val, maxLen = 255) => {
+  if (!val || typeof val !== 'string') return undefined;
+  return val.trim().substring(0, maxLen) || undefined;
+};
+
+const toInt = (val) => {
+  const parsed = parseInt(val, 10);
+  return isNaN(parsed) ? undefined : parsed;
+};
+
+const toFloat = (val) => {
+  const parsed = parseFloat(val);
+  return isNaN(parsed) ? undefined : parsed;
+};
+
+const clamp = (val, min, max) => {
+  if (val === undefined || val === null) return min;
+  return Math.max(min, Math.min(max, val));
+};
 // ===========================================
 // MIDDLEWARE
 // ===========================================
@@ -1019,7 +1052,15 @@ app.post('/api/listings', authenticateToken, async (req, res) => {
         error: { message: 'Title, description, price and categoryId are required' } 
       });
     }
+const VALID_STATUSES = ['draft', 'pending', 'approved', 'rejected', 'sold', 'expired'];
 
+// In the create listing function, add this check:
+if (status && !VALID_STATUSES.includes(status)) {
+  return res.status(400).json({
+    success: false,
+    error: { message: `Invalid status. Must be one of: ${VALID_STATUSES.join(', ')}` }
+  });
+}
     // Verify category exists
     const category = await prisma.category.findUnique({ 
       where: { id: parseInt(categoryId) } 
