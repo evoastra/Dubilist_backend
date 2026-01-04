@@ -6,15 +6,17 @@ const pino = require('pino');
 const { env } = require('./env');
 
 const logger = pino({
-  level: env.LOG_LEVEL,
-  transport: env.LOG_PRETTY ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:standard',
-      ignore: 'pid,hostname',
-    },
-  } : undefined,
+  level: env.LOG_LEVEL || 'info', // ✅ FIXED
+  transport: env.LOG_PRETTY
+    ? {
+        target: 'pino-pretty',
+        options: {
+          colorize: true,
+          translateTime: 'SYS:standard',
+          ignore: 'pid,hostname',
+        },
+      }
+    : undefined,
   base: {
     env: env.NODE_ENV,
   },

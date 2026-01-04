@@ -1,6 +1,6 @@
 // ===========================================
 // PRISMA SCHEMA - DUBILIST MARKETPLACE
-// WITH DEDICATED CATEGORY TABLES
+// WITH DEDICATED CATEGORY TABLES + INTERIOR DESIGNER MODULE
 // ===========================================
 
 generator client {
@@ -63,6 +63,9 @@ model User {
   supportMessages     SupportTicketMessage[]
   fraudLogs           FraudLog[]
   notifications       Notification[]
+  designer            Designer?
+  designerBookings    DesignerBooking[]
+  designerReviews     DesignerReview[]
 
   @@index([email])
   @@index([phone])
@@ -852,6 +855,13 @@ enum NotificationType {
   new_favorite
   support_reply
   system
+  booking_request
+  booking_confirmed
+  booking_rejected
+  booking_cancelled
+  booking_reminder
+  new_review
+  review_response
 
   @@map("notification_type")
 }
@@ -869,4 +879,267 @@ model SystemConfig {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("system_config")
+}
+
+
+// ===========================================
+// INTERIOR DESIGNER MODEL
+// ===========================================
+
+model Designer {
+  id                  Int       @id @default(autoincrement())
+  userId              Int       @unique @map("user_id")
+  
+  // Profile Information
+  bio                 String    @db.Text
+  tagline             String?   @db.VarChar(255)
+  
+  // Location
+  location            String    @db.VarChar(200)
+  city                String?   @db.VarChar(100)
+  country             String?   @db.VarChar(100)
+  latitude            Decimal?  @db.Decimal(10, 8)
+  longitude           Decimal?  @db.Decimal(11, 8)
+  serviceRadius       Int?      @map("service_radius")  // km radius for service area
+  
+  // Services & Specializations
+  services            Json                              // ["Residential", "Commercial", "Consultation"]
+  specializations     Json?                             // ["Modern", "Classic", "Minimalist", "Industrial"]
+  
+  // Pricing
+  hourlyRate          Decimal?  @map("hourly_rate") @db.Decimal(10, 2)
+  consultationFee     Decimal?  @map("consultation_fee") @db.Decimal(10, 2)
+  currency            String    @default("AED") @db.VarChar(10)
+  
+  // Portfolio Photos
+  photos              Json?                             // Array of photo URLs
+  portfolioUrl        String?   @map("portfolio_url") @db.VarChar(500)
+  
+  // Professional Info
+  yearsExperience     Int?      @map("years_experience")
+  certifications      Json?                             // ["ASID", "NCIDQ", etc.]
+  education           String?   @db.Text
+  languages           Json?                             // ["English", "Arabic", "Hindi"]
+  
+  // Availability
+  availableDays       Json?     @map("available_days")  // ["Monday", "Tuesday", ...]
+  availableTimeStart  String?   @map("available_time_start") @db.VarChar(10)  // "09:00"
+  availableTimeEnd    String?   @map("available_time_end") @db.VarChar(10)    // "18:00"
+  isAvailable         Boolean   @default(true) @map("is_available")
+  
+  // Ratings & Stats
+  rating              Decimal   @default(0) @db.Decimal(3, 2)
+  totalReviews        Int       @default(0) @map("total_reviews")
+  completedProjects   Int       @default(0) @map("completed_projects")
+  
+  // Verification & Status
+  isVerified          Boolean   @default(false) @map("is_verified")
+  verifiedAt          DateTime? @map("verified_at")
+  isActive            Boolean   @default(true) @map("is_active")
+  isFeatured          Boolean   @default(false) @map("is_featured")
+  featuredUntil       DateTime? @map("featured_until")
+  
+  // Soft delete
+  isDeleted           Boolean   @default(false) @map("is_deleted")
+  deletedAt           DateTime? @map("deleted_at")
+  
+  // Timestamps
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  bookings            DesignerBooking[]
+  reviews             DesignerReview[]
+  portfolioItems      DesignerPortfolio[]
+
+  @@index([userId])
+  @@index([location])
+  @@index([city])
+  @@index([isActive])
+  @@index([isVerified])
+  @@index([rating])
+  @@index([createdAt])
+  @@map("designers")
+}
+
+
+// ===========================================
+// DESIGNER PORTFOLIO MODEL
+// ===========================================
+
+model DesignerPortfolio {
+  id              Int       @id @default(autoincrement())
+  designerId      Int       @map("designer_id")
+  
+  // Project Details
+  title           String    @db.VarChar(255)
+  description     String?   @db.Text
+  projectType     String    @map("project_type") @db.VarChar(100)  // Residential, Commercial, Office
+  style           String?   @db.VarChar(100)  // Modern, Classic, etc.
+  
+  // Images
+  images          Json                        // Array of image URLs
+  beforeImages    Json?     @map("before_images")
+  afterImages     Json?     @map("after_images")
+  
+  // Project Info
+  location        String?   @db.VarChar(200)
+  area            Int?                        // sq.ft or sq.m
+  budget          String?   @db.VarChar(100)  // Budget range
+  duration        String?   @db.VarChar(100)  // "3 months"
+  completedAt     DateTime? @map("completed_at")
+  
+  // Additional
+  tags            Json?                       // ["kitchen", "bathroom", "living room"]
+  isFeatured      Boolean   @default(false) @map("is_featured")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  designer        Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
+
+  @@index([designerId])
+  @@index([projectType])
+  @@map("designer_portfolios")
+}
+
+
+// ===========================================
+// DESIGNER BOOKING MODEL
+// ===========================================
+
+model DesignerBooking {
+  id                  Int       @id @default(autoincrement())
+  
+  // Parties
+  designerId          Int       @map("designer_id")
+  userId              Int       @map("user_id")
+  
+  // Booking Details
+  dateTime            DateTime  @map("date_time")
+  duration            Int       @default(60)              // minutes
+  endTime             DateTime? @map("end_time")
+  
+  // Booking Type
+  bookingType         String    @map("booking_type") @db.VarChar(50)  // consultation, site_visit, design_session
+  
+  // Status
+  status              BookingStatus @default(pending)
+  
+  // Notes & Communication
+  userNotes           String?   @map("user_notes") @db.Text
+  designerNotes       String?   @map("designer_notes") @db.Text
+  
+  // Cancellation/Rejection
+  cancelledBy         Int?      @map("cancelled_by")
+  cancelledAt         DateTime? @map("cancelled_at")
+  cancellationReason  String?   @map("cancellation_reason") @db.Text
+  rejectionReason     String?   @map("rejection_reason") @db.Text
+  
+  // Location Details (for site visits)
+  meetingType         String?   @map("meeting_type") @db.VarChar(50)  // online, in_person
+  meetingLocation     String?   @map("meeting_location") @db.Text
+  meetingLink         String?   @map("meeting_link") @db.VarChar(500)
+  
+  // Pricing
+  fee                 Decimal?  @db.Decimal(10, 2)
+  currency            String    @default("AED") @db.VarChar(10)
+  isPaid              Boolean   @default(false) @map("is_paid")
+  paidAt              DateTime? @map("paid_at")
+  
+  // Confirmation
+  confirmedAt         DateTime? @map("confirmed_at")
+  completedAt         DateTime? @map("completed_at")
+  
+  // Reminders
+  reminderSent        Boolean   @default(false) @map("reminder_sent")
+  reminderSentAt      DateTime? @map("reminder_sent_at")
+  
+  // Timestamps
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  designer            Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review              DesignerReview?
+
+  @@index([designerId])
+  @@index([userId])
+  @@index([status])
+  @@index([dateTime])
+  @@index([createdAt])
+  @@map("designer_bookings")
+}
+
+enum BookingStatus {
+  pending
+  confirmed
+  rejected
+  cancelled
+  completed
+  no_show
+
+  @@map("booking_status")
+}
+
+
+// ===========================================
+// DESIGNER REVIEW MODEL
+// ===========================================
+
+model DesignerReview {
+  id              Int       @id @default(autoincrement())
+  
+  // Relations
+  designerId      Int       @map("designer_id")
+  userId          Int       @map("user_id")
+  bookingId       Int?      @unique @map("booking_id")
+  
+  // Ratings (1-5)
+  rating          Int                        // Overall rating
+  communicationRating Int?  @map("communication_rating")
+  professionalismRating Int? @map("professionalism_rating")
+  qualityRating   Int?      @map("quality_rating")
+  valueRating     Int?      @map("value_rating")
+  
+  // Review Content
+  title           String?   @db.VarChar(255)
+  comment         String    @db.Text
+  
+  // Photos (before/after, completed work)
+  photos          Json?
+  
+  // Designer Response
+  response        String?   @db.Text
+  respondedAt     DateTime? @map("responded_at")
+  
+  // Moderation
+  isApproved      Boolean   @default(false) @map("is_approved")
+  approvedAt      DateTime? @map("approved_at")
+  approvedBy      Int?      @map("approved_by")
+  isHidden        Boolean   @default(false) @map("is_hidden")
+  hiddenReason    String?   @map("hidden_reason") @db.VarChar(255)
+  
+  // Helpful votes
+  helpfulCount    Int       @default(0) @map("helpful_count")
+  
+  // Timestamps
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  // Relations
+  designer        Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  booking         DesignerBooking? @relation(fields: [bookingId], references: [id])
+
+  @@index([designerId])
+  @@index([userId])
+  @@index([rating])
+  @@index([isApproved])
+  @@index([createdAt])
+  @@map("designer_reviews")
 }

@@ -9,11 +9,15 @@ const { hashToken } = require('./crypto');
 
 // Generate access token
 const generateAccessToken = (user) => {
+ console.log('ACCESS SECRET:', env.JWT_ACCESS_SECRET);
+console.log('ACCESS EXPIRY:', env.JWT_ACCESS_EXPIRY);
+
   const payload = {
     userId: user.id,
     email: user.email,
     role: user.role || user.role?.name,
     type: 'access',
+    
   };
 
   return jwt.sign(payload, env.JWT_ACCESS_SECRET, {

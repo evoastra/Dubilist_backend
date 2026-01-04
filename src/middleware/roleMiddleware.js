@@ -5,6 +5,7 @@
 const { ApiError } = require('./errorHandler');
 const { logger } = require('../config/logger');
 
+
 // Role hierarchy (higher index = more permissions)
 const ROLE_HIERARCHY = {
   buyer: 0,
@@ -70,7 +71,7 @@ const requireMinRole = (minRole) => {
     }
   };
 };
-
+const requireAdminOrModerator = requireRole('admin', 'moderator');
 // Check if user has specific permission
 const requirePermission = (...requiredPermissions) => {
   return (req, res, next) => {
@@ -190,6 +191,7 @@ module.exports = {
   requireAdmin,
   requireCanPost,
   requireOwnership,
+  requireAdminOrModerator, 
   requireOwnerOrModerator,
   ROLE_HIERARCHY,
 };

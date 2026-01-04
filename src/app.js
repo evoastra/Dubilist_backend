@@ -14,6 +14,8 @@ const { prisma, connectDatabase } = require('./config/database');
 const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
 const multer = require('multer');
+const designersRoutes = require('./modules/designers/designers.routes');
+const bookingsRoutes = require('./modules/bookings/bookings.routes');
 
 const app = express();
 
@@ -3206,7 +3208,8 @@ app.put('/api/admin/config', authenticateToken, requireAdmin, async (req, res) =
     });
   }
 });
-
+app.use('/api/designers', designersRoutes);
+app.use('/api/bookings', bookingsRoutes);
 // ===========================================
 // 404 & ERROR HANDLERS
 // ===========================================
@@ -3281,6 +3284,7 @@ io.use(async (socket, next) => {
     next(new Error('Invalid token'));
   }
 });
+
 
 // ===========================================
 // MESSAGE VALIDATION (No images, No vulgar)
@@ -3476,6 +3480,7 @@ io.on('connection', (socket) => {
     console.log(`❌ Disconnected: ${userName} (${reason})`);
   });
 });
+
 
 // Export server with socket
 module.exports = { app, server, io };

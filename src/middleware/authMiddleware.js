@@ -19,63 +19,41 @@ const authenticate = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
 
-    try {
-      const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
+    const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
 
-      // Get user from database
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: {
-          role: {
-            include: {
-              permissions: {
-                include: {
-                  permission: true,
-                },
-              },
-            },
-          },
-        },
-      });
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId || decoded.id },
+      include: { role: true },
+    });
 
-      if (!user) {
-        throw new ApiError(401, 'USER_NOT_FOUND', 'User not found');
-      }
-
-      if (user.isBlocked) {
-        throw new ApiError(403, 'USER_BLOCKED', 'Your account has been blocked');
-      }
-
-      if (user.isDeleted) {
-        throw new ApiError(401, 'USER_DELETED', 'User account has been deleted');
-      }
-
-      // Attach user to request
-      req.user = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role.name,
-        roleId: user.roleId,
-        permissions: user.role.permissions.map(rp => rp.permission.key),
-        isVerified: user.isVerified,
-        canPostListings: user.canPostListings,
-      };
-
-      next();
-    } catch (jwtError) {
-      if (jwtError.name === 'TokenExpiredError') {
-        throw new ApiError(401, 'TOKEN_EXPIRED', 'Access token has expired');
-      }
-      if (jwtError.name === 'JsonWebTokenError') {
-        throw new ApiError(401, 'INVALID_TOKEN', 'Invalid access token');
-      }
-      throw jwtError;
+    if (!user) {
+      throw new ApiError(401, 'USER_NOT_FOUND', 'User not found');
     }
+
+    if (user.isBlocked) {
+      throw new ApiError(403, 'USER_BLOCKED', 'Your account has been blocked');
+    }
+
+    if (user.isDeleted) {
+      throw new ApiError(401, 'USER_DELETED', 'User account has been deleted');
+    }
+
+    req.user = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role.name,
+      roleId: user.roleId,
+      isVerified: user.isVerified,
+      canPostListings: user.canPostListings,
+    };
+
+    next();
   } catch (error) {
     next(error);
   }
 };
+
 
 // Optional authentication (doesn't fail if no token)
 const optionalAuth = async (req, res, next) => {
@@ -87,16 +65,24 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
+    // ✅ token must be declared FIRST
     const token = authHeader.split(' ')[1];
+
+    if (!token) {
+      req.user = null;
+      return next();
+    }
+
+    // (Optional debug logs – now SAFE)
+    console.log('VERIFY SECRET:', env.JWT_ACCESS_SECRET);
+    console.log('TOKEN DECODE:', jwt.decode(token));
 
     try {
       const decoded = jwt.verify(token, env.JWT_ACCESS_SECRET);
 
       const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        include: {
-          role: true,
-        },
+        where: { id: decoded.userId || decoded.id },
+        include: { role: true },
       });
 
       if (user && !user.isBlocked && !user.isDeleted) {
@@ -112,15 +98,18 @@ const optionalAuth = async (req, res, next) => {
       } else {
         req.user = null;
       }
-    } catch {
-      req.user = null;
-    }
 
-    next();
+      return next();
+    } catch (err) {
+      // Invalid / expired token → ignore
+      req.user = null;
+      return next();
+    }
   } catch (error) {
-    next(error);
+    return next(error);
   }
 };
+
 
 // Verify refresh token
 const verifyRefreshToken = async (req, res, next) => {
@@ -140,7 +129,8 @@ const verifyRefreshToken = async (req, res, next) => {
 
       const storedToken = await prisma.refreshToken.findFirst({
         where: {
-          userId: decoded.userId,
+          userId: decoded.userId || decoded.id,
+
           tokenHash,
           revokedAt: null,
           expiresAt: { gt: new Date() },
