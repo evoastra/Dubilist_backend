@@ -3,7 +3,12 @@
 // File: src/modules/designers/designers.validation.js
 // ===========================================
 
-const { validationResult, body, param, query } = require('express-validator');
+const expressValidator = require('express-validator');
+
+const validationResult = expressValidator.validationResult;
+const body = expressValidator.body;
+const param = expressValidator.param;
+const query = expressValidator.query;
 
 // ===========================================
 // VALIDATION HELPERS
