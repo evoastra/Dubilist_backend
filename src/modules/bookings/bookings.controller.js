@@ -104,6 +104,11 @@ const createBooking = async (req, res) => {
       duration: req.body.duration || 60,
       bookingType: req.body.bookingType || 'consultation',
       userNotes: req.body.notes,
+      userName: req.body.userName || req.body.user_name || req.user.name,
+  userAddress: req.body.userAddress || req.body.user_address,
+  userPhone: req.body.userPhone || req.body.user_phone || req.user.phone,
+   projectType: req.body.projectType || req.body.project_type,
+  projectDescription: req.body.projectDescription || req.body.project_description,
       meetingType: req.body.meetingType,
       meetingLocation: req.body.meetingLocation,
       fee: designer.consultationFee,
@@ -162,6 +167,13 @@ const updateBooking = async (req, res) => {
       duration: req.body.duration,
       userNotes: req.body.notes,
       meetingType: req.body.meetingType,
+       userName: req.body.userName || req.body.user_name,
+  userAddress: req.body.userAddress || req.body.user_address,
+  userPhone: req.body.userPhone || req.body.user_phone,
+  
+  // ✅ NEW FIELDS - Allow updating project details
+  projectType: req.body.projectType || req.body.project_type,
+  projectDescription: req.body.projectDescription || req.body.project_description,
       meetingLocation: req.body.meetingLocation
     });
 

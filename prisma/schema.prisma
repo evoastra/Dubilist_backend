@@ -1,8 +1,3 @@
-// ===========================================
-// PRISMA SCHEMA - DUBILIST MARKETPLACE
-// WITH DEDICATED CATEGORY TABLES + INTERIOR DESIGNER MODULE
-// ===========================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -12,60 +7,59 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-// ===========================================
-// USER & AUTHENTICATION MODELS
-// ===========================================
-
 model Role {
-  id          Int          @id @default(autoincrement())
-  name        String       @unique @db.VarChar(50)
-  description String?      @db.VarChar(255)
-  createdAt   DateTime     @default(now()) @map("created_at")
-  updatedAt   DateTime     @updatedAt @map("updated_at")
-  users       User[]
+  id               Int                @id @default(autoincrement())
+  name             String             @unique @db.VarChar(50)
+  description      String?            @db.VarChar(255)
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+  role_permissions role_permissions[]
+  users            User[]
 
   @@map("roles")
 }
 
 model User {
-  id                  Int       @id @default(autoincrement())
-  name                String    @db.VarChar(100)
-  email               String    @unique @db.VarChar(255)
-  phone               String?   @db.VarChar(20)
-  passwordHash        String?   @map("password_hash") @db.VarChar(255)
-  roleId              Int       @map("role_id")
-  isVerified          Boolean   @default(false) @map("is_verified")
-  isBlocked           Boolean   @default(false) @map("is_blocked")
-  avatarUrl           String?   @map("avatar_url") @db.VarChar(500)
-  avatarS3Key         String?   @map("avatar_s3_key") @db.VarChar(500)
-  bio                 String?   @db.Text
-  lastLoginAt         DateTime? @map("last_login_at")
-  lastListingPostedAt DateTime? @map("last_listing_posted_at")
-  lastChatMessageAt   DateTime? @map("last_chat_message_at")
-  isDeleted           Boolean   @default(false) @map("is_deleted")
-  deletedAt           DateTime? @map("deleted_at")
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-
-  role                Role                   @relation(fields: [roleId], references: [id])
-  refreshTokens       RefreshToken[]
-  listings            Listing[]
-  favorites           Favorite[]
-  recentlyViewed      RecentlyViewed[]
+  id                  Int                    @id @default(autoincrement())
+  name                String                 @db.VarChar(100)
+  email               String                 @unique @db.VarChar(255)
+  phone               String?                @db.VarChar(20)
+  passwordHash        String?                @map("password_hash") @db.VarChar(255)
+  roleId              Int                    @map("role_id")
+  isVerified          Boolean                @default(false) @map("is_verified")
+  isBlocked           Boolean                @default(false) @map("is_blocked")
+  avatarUrl           String?                @map("avatar_url") @db.VarChar(500)
+  bio                 String?                @db.Text
+  lastLoginAt         DateTime?              @map("last_login_at")
+  lastListingPostedAt DateTime?              @map("last_listing_posted_at")
+  lastChatMessageAt   DateTime?              @map("last_chat_message_at")
+  isDeleted           Boolean                @default(false) @map("is_deleted")
+  deletedAt           DateTime?              @map("deleted_at")
+  createdAt           DateTime               @default(now()) @map("created_at")
+  updatedAt           DateTime               @updatedAt @map("updated_at")
+  avatarS3Key         String?                @map("avatar_s3_key") @db.VarChar(500)
+  can_post_listings   Boolean                @default(true)
+  admin_notes         admin_notes[]
+  audit_logs          audit_logs[]
+  chatMessages        ChatMessage[]
   chatRoomsAsBuyer    ChatRoom[]             @relation("BuyerChats")
   chatRoomsAsSeller   ChatRoom[]             @relation("SellerChats")
-  chatMessages        ChatMessage[]
-  reportedByMe        ReportedUser[]         @relation("Reporter")
-  reportsAgainstMe    ReportedUser[]         @relation("ReportedUser")
-  listingReports      ReportedListing[]
-  supportTickets      SupportTicket[]
-  supportMessages     SupportTicketMessage[]
-  fraudLogs           FraudLog[]
-  notifications       Notification[]
-  designer            Designer?
   designerBookings    DesignerBooking[]
   designerReviews     DesignerReview[]
+  designer            Designer?
+  favorites           Favorite[]
+  fraudLogs           FraudLog[]
+  listings            Listing[]
+  jobApplications    JobApplication[]
+  notifications       Notification[]
+  recentlyViewed      RecentlyViewed[]
+  refreshTokens       RefreshToken[]
+  listingReports      ReportedListing[]
+  reportsAgainstMe    ReportedUser[]         @relation("ReportedUser")
+  reportedByMe        ReportedUser[]         @relation("Reporter")
+  supportMessages     SupportTicketMessage[]
+  supportTickets      SupportTicket[]
+  role                Role                   @relation(fields: [roleId], references: [id])
 
   @@index([email])
   @@index([phone])
@@ -89,25 +83,19 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
-
-// ===========================================
-// CATEGORY MODEL
-// ===========================================
-
 model Category {
   id          Int        @id @default(autoincrement())
   name        String     @db.VarChar(100)
   slug        String     @unique @db.VarChar(100)
   description String?    @db.Text
   iconUrl     String?    @map("icon_url") @db.VarChar(500)
-  imageUrl    String?    @map("image_url") @db.VarChar(500)
-  s3Key       String?    @map("s3_key") @db.VarChar(500)
   parentId    Int?       @map("parent_id")
-  orderIndex  Int        @default(0) @map("order_index")
   isActive    Boolean    @default(true) @map("is_active")
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
-
+  imageUrl    String?    @map("image_url") @db.VarChar(500)
+  orderIndex  Int        @default(0) @map("order_index")
+  s3Key       String?    @map("s3_key") @db.VarChar(500)
   parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
   children    Category[] @relation("CategoryHierarchy")
   listings    Listing[]
@@ -117,71 +105,50 @@ model Category {
   @@map("categories")
 }
 
-
-// ===========================================
-// MAIN LISTING MODEL (Base for all categories)
-// ===========================================
-
 model Listing {
-  id             Int           @id @default(autoincrement())
-  userId         Int           @map("user_id")
-  categoryId     Int           @map("category_id")
-  title          String        @db.VarChar(255)
-  description    String        @db.Text
- //attributes     Json?
-
-  price          Decimal       @db.Decimal(12, 2)
-  currency       String        @default("AED") @db.VarChar(10)
-  
-  // Location
-  city           String?       @db.VarChar(100)
-  country        String?       @db.VarChar(100)
-  address        String?       @db.VarChar(500)
-  latitude       Decimal?      @db.Decimal(10, 8)
-  longitude      Decimal?      @db.Decimal(11, 8)
-  
-  // Contact
-  contactPhone   String?       @map("contact_phone") @db.VarChar(20)
-  contactEmail   String?       @map("contact_email") @db.VarChar(255)
-  contactWhatsapp String?      @map("contact_whatsapp") @db.VarChar(20)
-  
-  // Status
-  status         ListingStatus @default(draft)
-  reasonRejected String?       @map("reason_rejected") @db.Text
-  isNegotiable   Boolean       @default(true) @map("is_negotiable")
-  isFeatured     Boolean       @default(false) @map("is_featured")
-  featuredUntil  DateTime?     @map("featured_until")
-  
-  // Counts
-  viewsCount     Int           @default(0) @map("views_count")
-  favoritesCount Int           @default(0) @map("favorites_count")
-  
-  // Soft delete
-  isDeleted      Boolean       @default(false) @map("is_deleted")
-  deletedAt      DateTime?     @map("deleted_at")
-  
-  // Timestamps
-  expiresAt      DateTime?     @map("expires_at")
-  publishedAt    DateTime?     @map("published_at")
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
-
-  // Relations
-  user           User          @relation(fields: [userId], references: [id])
-  category       Category      @relation(fields: [categoryId], references: [id])
-  images         ListingImage[]
-  favorites      Favorite[]
-  recentlyViewed RecentlyViewed[]
-  chatRooms      ChatRoom[]
-  reports        ReportedListing[]
-  
-  // Category-specific relations (ONE listing has ONE category detail)
-  motorDetails       MotorListing?
-  jobDetails         JobListing?
-  propertyDetails    PropertyListing?
-  classifiedDetails  ClassifiedListing?
-  electronicDetails  ElectronicListing?
-  furnitureDetails   FurnitureListing?
+  id                Int                @id @default(autoincrement())
+  userId            Int                @map("user_id")
+  title             String             @db.VarChar(255)
+  description       String             @db.Text
+  price             Decimal            @db.Decimal(12, 2)
+  currency          String             @default("AED") @db.VarChar(10)
+  categoryId        Int                @map("category_id")
+  city              String?            @db.VarChar(100)
+  country           String?            @db.VarChar(100)
+  address           String?            @db.VarChar(500)
+  latitude          Decimal?           @db.Decimal(10, 8)
+  longitude         Decimal?           @db.Decimal(11, 8)
+  status            ListingStatus      @default(draft)
+  reasonRejected    String?            @map("reason_rejected") @db.Text
+  viewsCount        Int                @default(0) @map("views_count")
+  favoritesCount    Int                @default(0) @map("favorites_count")
+  contactPhone      String?            @map("contact_phone") @db.VarChar(20)
+  contactEmail      String?            @map("contact_email") @db.VarChar(255)
+  isNegotiable      Boolean            @default(true) @map("is_negotiable")
+  isDeleted         Boolean            @default(false) @map("is_deleted")
+  deletedAt         DateTime?          @map("deleted_at")
+  expiresAt         DateTime?          @map("expires_at")
+  publishedAt       DateTime?          @map("published_at")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  contactWhatsapp   String?            @map("contact_whatsapp") @db.VarChar(20)
+  featuredUntil     DateTime?          @map("featured_until")
+  isFeatured        Boolean            @default(false) @map("is_featured")
+  admin_notes       admin_notes[]
+  chatRooms         ChatRoom[]
+  jobApplications    JobApplication[]
+  classifiedDetails ClassifiedListing?
+  electronicDetails ElectronicListing?
+  favorites         Favorite[]
+  furnitureDetails  FurnitureListing?
+  jobDetails        JobListing?
+  images            ListingImage[]
+  category          Category           @relation(fields: [categoryId], references: [id])
+  user              User               @relation(fields: [userId], references: [id])
+  motorDetails      MotorListing?
+  propertyDetails   PropertyListing?
+  recentlyViewed    RecentlyViewed[]
+  reports           ReportedListing[]
 
   @@index([userId])
   @@index([categoryId])
@@ -194,23 +161,6 @@ model Listing {
   @@map("listings")
 }
 
-enum ListingStatus {
-  draft
-  pending
-  approved
-  rejected
-  sold
-  expired
-  completed
-
-  @@map("listing_status")
-}
-
-
-// ===========================================
-// LISTING IMAGES
-// ===========================================
-
 model ListingImage {
   id         Int      @id @default(autoincrement())
   listingId  Int      @map("listing_id")
@@ -219,7 +169,6 @@ model ListingImage {
   orderIndex Int      @default(0) @map("order_index")
   isPrimary  Boolean  @default(false) @map("is_primary")
   createdAt  DateTime @default(now()) @map("created_at")
-  
   listing    Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([listingId])
@@ -227,51 +176,35 @@ model ListingImage {
   @@map("listing_images")
 }
 
-
-// ===========================================
-// 1. MOTORS TABLE (category_id = 1)
-// ===========================================
-
 model MotorListing {
   id              Int      @id @default(autoincrement())
   listingId       Int      @unique @map("listing_id")
-  
-  // Make & Model
-  make            String   @db.VarChar(100)  // Toyota, Honda, BMW, etc.
-  model           String   @db.VarChar(100)  // Camry, Civic, X5, etc.
-  variant         String?  @db.VarChar(100)  // SE, LE, Sport, etc.
-  
-  // Year & Usage
-  year            Int                        // 2020, 2021, etc.
-  kilometres      Int?                       // Odometer reading
-  hoursUsed       Int?     @map("hours_used") // For machinery
-  
-  // Specifications
-  transmission    String?  @db.VarChar(50)   // Automatic, Manual, CVT
-  fuelType        String?  @map("fuel_type") @db.VarChar(50)  // Petrol, Diesel, Electric, Hybrid
-  bodyType        String?  @map("body_type") @db.VarChar(50)  // Sedan, SUV, Hatchback, Truck
-  engineSize      Int?     @map("engine_size")  // cc (e.g., 2000, 3500)
-  cylinders       Int?                       // 4, 6, 8
-  horsepower      Int?                       // HP
-  
-  // Capacity (for trucks/commercial)
-  payloadCapacity Int?     @map("payload_capacity")  // kg
-  seatingCapacity Int?     @map("seating_capacity")  // Number of seats
-  
-  // Condition & Features
-  condition       String?  @db.VarChar(50)   // New, Used, Certified Pre-Owned
-  color           String?  @db.VarChar(50)   // Exterior color
+  make            String   @db.VarChar(100)
+  model           String   @db.VarChar(100)
+  variant         String?  @db.VarChar(100)
+  year            Int
+  kilometres      Int?
+  hoursUsed       Int?     @map("hours_used")
+  transmission    String?  @db.VarChar(50)
+  fuelType        String?  @map("fuel_type") @db.VarChar(50)
+  bodyType        String?  @map("body_type") @db.VarChar(50)
+  motorType       String?  @map("motor_type") @db.VarChar(50)
+  engineSize      Int?     @map("engine_size")
+  cylinders       Int?
+  horsepower      Int?
+  payloadCapacity Int?     @map("payload_capacity")
+  seatingCapacity Int?     @map("seating_capacity")
+  condition       String?  @db.VarChar(50)
+  color           String?  @db.VarChar(50)
   interiorColor   String?  @map("interior_color") @db.VarChar(50)
-  warranty        String?  @db.VarChar(100)  // Warranty info
-  serviceHistory  Boolean? @map("service_history")  // Has service history?
-  
-  // Additional
-  features        Json?                      // ["Sunroof", "Leather", "Navigation"]
-  specs           Json?                      // Additional specs as JSON
-  
+  warranty        String?  @db.VarChar(100)
+  serviceHistory  Boolean? @map("service_history")
+  features        Json?
+  images          Json?
+  images_s3_keys  Json?
+  specs           Json?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
-  
   listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([make])
@@ -282,56 +215,36 @@ model MotorListing {
   @@map("motor_listings")
 }
 
-
-// ===========================================
-// 2. JOBS TABLE (category_id = 2)
-// ===========================================
-
 model JobListing {
-  id                  Int      @id @default(autoincrement())
-  listingId           Int      @unique @map("listing_id")
-  
-  // Job Details
-  jobTitle            String   @map("job_title") @db.VarChar(200)
-  companyName         String   @map("company_name") @db.VarChar(200)
-  companyLogoUrl      String?  @map("company_logo_url") @db.VarChar(500)
-  companyLogoS3Key    String?  @map("company_logo_s3_key") @db.VarChar(500)
-  
-  // Industry & Type
-  industry            String   @db.VarChar(100)  // IT, Finance, Healthcare, etc.
-  jobType             String   @map("job_type") @db.VarChar(50)  // Full-time, Part-time, Contract, Freelance
-  workplaceType       String?  @map("workplace_type") @db.VarChar(50)  // On-site, Remote, Hybrid
-  
-  // Experience & Education
-  experienceMin       Int?     @map("experience_min")  // Minimum years
-  experienceMax       Int?     @map("experience_max")  // Maximum years
-  experienceLevel     String?  @map("experience_level") @db.VarChar(50)  // Entry, Mid, Senior, Executive
-  educationRequired   String?  @map("education_required") @db.VarChar(100)  // Bachelor's, Master's, etc.
-  
-  // Salary
-  salaryMin           Decimal? @map("salary_min") @db.Decimal(12, 2)
-  salaryMax           Decimal? @map("salary_max") @db.Decimal(12, 2)
-  salaryPeriod        String?  @map("salary_period") @db.VarChar(20)  // Monthly, Yearly, Hourly
-  hideSalary          Boolean  @default(false) @map("hide_salary")
-  
-  // Requirements
-  skillsRequired      Json?    @map("skills_required")  // ["JavaScript", "React", "Node.js"]
-  languagesRequired   Json?    @map("languages_required")  // ["English", "Arabic"]
-  certificationsRequired Json? @map("certifications_required")
-  
-  // Benefits
-  benefits            Json?                    // ["Health Insurance", "Visa", "Housing"]
-  
-  // Additional
-  numberOfPositions   Int      @default(1) @map("number_of_positions")
-  applicationDeadline DateTime? @map("application_deadline")
-  applicationEmail    String?  @map("application_email") @db.VarChar(255)
-  applicationUrl      String?  @map("application_url") @db.VarChar(500)
-  
-  createdAt           DateTime @default(now()) @map("created_at")
-  updatedAt           DateTime @updatedAt @map("updated_at")
-  
-  listing             Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  id                     Int       @id @default(autoincrement())
+  listingId              Int       @unique @map("listing_id")
+  jobTitle               String    @map("job_title") @db.VarChar(200)
+  companyName            String    @map("company_name") @db.VarChar(200)
+  companyLogoUrl         String?   @map("company_logo_url") @db.VarChar(500)
+  companyLogoS3Key       String?   @map("company_logo_s3_key") @db.VarChar(500)
+  industry               String    @db.VarChar(100)
+  jobType                String    @map("job_type") @db.VarChar(50)
+  workplaceType          String?   @map("workplace_type") @db.VarChar(50)
+  experienceMin          Int?      @map("experience_min")
+  experienceMax          Int?      @map("experience_max")
+  experienceLevel        String?   @map("experience_level") @db.VarChar(50)
+  educationRequired      String?   @map("education_required") @db.VarChar(100)
+  salaryMin              Decimal?  @map("salary_min") @db.Decimal(12, 2)
+  salaryMax              Decimal?  @map("salary_max") @db.Decimal(12, 2)
+  salaryPeriod           String?   @map("salary_period") @db.VarChar(20)
+  hideSalary             Boolean   @default(false) @map("hide_salary")
+  skillsRequired         Json?     @map("skills_required")
+  languagesRequired      Json?     @map("languages_required")
+  certificationsRequired Json?     @map("certifications_required")
+  benefits               Json?
+  responsibilities       Json?
+  numberOfPositions      Int       @default(1) @map("number_of_positions")
+  applicationDeadline    DateTime? @map("application_deadline")
+  applicationEmail       String?   @map("application_email") @db.VarChar(255)
+  applicationUrl         String?   @map("application_url") @db.VarChar(500)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  updatedAt              DateTime  @updatedAt @map("updated_at")
+  listing                Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([industry])
   @@index([jobType])
@@ -339,61 +252,37 @@ model JobListing {
   @@map("job_listings")
 }
 
-
-// ===========================================
-// 3. PROPERTY TABLE (category_id = 3)
-// ===========================================
-
 model PropertyListing {
-  id              Int      @id @default(autoincrement())
-  listingId       Int      @unique @map("listing_id")
-  
-  // Listing Type
-  listingType     String   @map("listing_type") @db.VarChar(20)  // For Sale, For Rent
-  
-  // Property Type
-  propertyType    String   @map("property_type") @db.VarChar(50)  // Apartment, Villa, Townhouse, Penthouse, Studio, Land, Office, Shop
-  
-  // Specifications
-  bedrooms        Int?                       // Number of bedrooms (null for studio)
-  bathrooms       Int?                       // Number of bathrooms
-  areaSqft        Decimal? @map("area_sqft") @db.Decimal(10, 2)  // Size in sq.ft
-  plotSizeSqft    Decimal? @map("plot_size_sqft") @db.Decimal(10, 2)  // For villas/land
-  
-  // Building Info
-  floorNumber     Int?     @map("floor_number")
-  totalFloors     Int?     @map("total_floors")
-  buildingAge     Int?     @map("building_age")  // Years
-  buildingName    String?  @map("building_name") @db.VarChar(200)
-  
-  // Furnishing & Condition
-  furnishing      String?  @db.VarChar(50)   // Unfurnished, Semi-Furnished, Fully Furnished
-  condition       String?  @db.VarChar(50)   // Ready to Move, Under Construction, Off-Plan
-  
-  // Parking
-  parkingSpaces   Int?     @map("parking_spaces")
-  
-  // For Rent specific
-  rentFrequency   String?  @map("rent_frequency") @db.VarChar(20)  // Monthly, Quarterly, Yearly
-  securityDeposit Decimal? @map("security_deposit") @db.Decimal(12, 2)
-  numberOfCheques Int?     @map("number_of_cheques")  // Common in UAE
-  
-  // Amenities & Features
-  amenities       Json?                      // ["Pool", "Gym", "Security", "Parking", "Balcony"]
-  nearbyPlaces    Json?    @map("nearby_places")  // ["Metro", "Mall", "School"]
-  
-  // Ownership
-  ownershipType   String?  @map("ownership_type") @db.VarChar(50)  // Freehold, Leasehold
-  
-  // Developer (for off-plan)
-  developerName   String?  @map("developer_name") @db.VarChar(200)
-  projectName     String?  @map("project_name") @db.VarChar(200)
+  id              Int       @id @default(autoincrement())
+  listingId       Int       @unique @map("listing_id")
+  listingType     String    @map("listing_type") @db.VarChar(20)
+  propertyType    String    @map("property_type") @db.VarChar(50)
+  bedrooms        Int?
+  bathrooms       Int?
+  halls           Int?
+  areaSqft        Decimal?  @map("area_sqft") @db.Decimal(10, 2)
+  plotSizeSqft    Decimal?  @map("plot_size_sqft") @db.Decimal(10, 2)
+  floorNumber     Int?      @map("floor_number")
+  totalFloors     Int?      @map("total_floors")
+  buildingAge     Int?      @map("building_age")
+  buildingName    String?   @map("building_name") @db.VarChar(200)
+  furnishing      String?   @db.VarChar(50)
+  condition       String?   @db.VarChar(50)
+  parkingSpaces   Int?      @map("parking_spaces")
+  rentFrequency   String?   @map("rent_frequency") @db.VarChar(20)
+  securityDeposit Decimal?  @map("security_deposit") @db.Decimal(12, 2)
+  numberOfCheques Int?      @map("number_of_cheques")
+  amenities       Json?
+  nearbyPlaces    Json?     @map("nearby_places")
+  ownershipType   String?   @map("ownership_type") @db.VarChar(50)
+  developerName   String?   @map("developer_name") @db.VarChar(200)
+  projectName     String?   @map("project_name") @db.VarChar(200)
   completionDate  DateTime? @map("completion_date")
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  images          Json?
+  images_s3_keys  Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  listing         Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([listingType])
   @@index([propertyType])
@@ -402,51 +291,32 @@ model PropertyListing {
   @@map("property_listings")
 }
 
-
-// ===========================================
-// 4. CLASSIFIEDS TABLE (category_id = 4)
-// ===========================================
-
 model ClassifiedListing {
-  id              Int      @id @default(autoincrement())
-  listingId       Int      @unique @map("listing_id")
-  
-  // Sub-category
-  subCategory     String   @map("sub_category") @db.VarChar(100)  // Sports Equipment, Gym Equipment, Clothing, Footwear, Music Instruments, Books, Toys, etc.
-  
-  // Item Details
-  condition       String   @db.VarChar(50)   // New, Like New, Used - Good, Used - Fair
-  brand           String?  @db.VarChar(100)
-  model           String?  @db.VarChar(100)
-  
-  // Physical Properties
-  material        String?  @db.VarChar(100)  // Leather, Cotton, Steel, Wood, etc.
-  color           String?  @db.VarChar(50)
-  size            String?  @db.VarChar(50)   // S, M, L, XL or specific size
-  weight          Decimal? @db.Decimal(10, 2)  // kg
-  
-  // Dimensions
-  lengthCm        Decimal? @map("length_cm") @db.Decimal(10, 2)
-  widthCm         Decimal? @map("width_cm") @db.Decimal(10, 2)
-  heightCm        Decimal? @map("height_cm") @db.Decimal(10, 2)
-  
-  // For Clothing/Footwear
-  gender          String?  @db.VarChar(20)   // Men, Women, Unisex, Kids
-  ageGroup        String?  @map("age_group") @db.VarChar(50)  // Adult, Teen, Kids, Baby
-  
-  // Additional
-  quantity        Int      @default(1)
-  isHandmade      Boolean? @map("is_handmade")
-  yearOfPurchase  Int?     @map("year_of_purchase")
-  warranty        String?  @db.VarChar(100)
-  
-  // Features
-  features        Json?                      // Additional features as array
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  id             Int      @id @default(autoincrement())
+  listingId      Int      @unique @map("listing_id")
+  subCategory    String   @map("sub_category") @db.VarChar(100)
+  condition      String   @db.VarChar(50)
+  brand          String?  @db.VarChar(100)
+  model          String?  @db.VarChar(100)
+  material       String?  @db.VarChar(100)
+  color          String?  @db.VarChar(50)
+  size           String?  @db.VarChar(50)
+  weight         Decimal? @db.Decimal(10, 2)
+  lengthCm       Decimal? @map("length_cm") @db.Decimal(10, 2)
+  widthCm        Decimal? @map("width_cm") @db.Decimal(10, 2)
+  heightCm       Decimal? @map("height_cm") @db.Decimal(10, 2)
+  gender         String?  @db.VarChar(20)
+  ageGroup       String?  @map("age_group") @db.VarChar(50)
+  quantity       Int      @default(1)
+  isHandmade     Boolean? @map("is_handmade")
+  yearOfPurchase Int?     @map("year_of_purchase")
+  warranty       String?  @db.VarChar(100)
+  features       Json?
+  images         Json?
+  images_s3_keys Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  listing        Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([subCategory])
   @@index([condition])
@@ -454,71 +324,43 @@ model ClassifiedListing {
   @@map("classified_listings")
 }
 
-
-// ===========================================
-// 5. ELECTRONICS TABLE (category_id = 5)
-// ===========================================
-
 model ElectronicListing {
-  id              Int      @id @default(autoincrement())
-  listingId       Int      @unique @map("listing_id")
-  
-  // Sub-category
-  subCategory     String   @map("sub_category") @db.VarChar(100)  // Mobile Phones, Laptops, Television, Washing Machines, Refrigerators, Cameras, Gaming, Audio, etc.
-  
-  // Brand & Model
-  brand           String   @db.VarChar(100)  // Apple, Samsung, Sony, LG, etc.
-  model           String   @db.VarChar(100)
-  modelNumber     String?  @map("model_number") @db.VarChar(100)
-  
-  // Condition
-  condition       String   @db.VarChar(50)   // New, Like New, Used - Excellent, Used - Good, Used - Fair, For Parts
-  
-  // For Phones/Laptops/Computers
-  storage         String?  @db.VarChar(50)   // 64GB, 128GB, 256GB, 512GB, 1TB
-  ram             String?  @db.VarChar(50)   // 4GB, 8GB, 16GB, 32GB
-  processor       String?  @db.VarChar(100)  // Intel i7, Apple M2, Snapdragon 8 Gen 2
-  operatingSystem String?  @map("operating_system") @db.VarChar(50)  // iOS, Android, Windows, macOS
-  
-  // Display
-  screenSize      Decimal? @map("screen_size") @db.Decimal(5, 2)  // inches
-  resolution      String?  @db.VarChar(50)   // 1080p, 4K, etc.
-  displayType     String?  @map("display_type") @db.VarChar(50)  // LCD, OLED, AMOLED
-  
-  // For Appliances
-  capacity        String?  @db.VarChar(50)   // For washing machines (kg), refrigerators (L)
-  energyRating    String?  @map("energy_rating") @db.VarChar(10)  // A+++, A++, A+, etc.
-  wattage         Int?                       // Power consumption
-  
-  // Physical
-  color           String?  @db.VarChar(50)
-  weight          Decimal? @db.Decimal(10, 2)  // kg
-  
-  // Dimensions
-  lengthCm        Decimal? @map("length_cm") @db.Decimal(10, 2)
-  widthCm         Decimal? @map("width_cm") @db.Decimal(10, 2)
-  heightCm        Decimal? @map("height_cm") @db.Decimal(10, 2)
-  
-  // Warranty & Purchase
-  warrantyStatus  String?  @map("warranty_status") @db.VarChar(50)  // Under Warranty, Expired, No Warranty
+  id              Int       @id @default(autoincrement())
+  listingId       Int       @unique @map("listing_id")
+  subCategory     String    @map("sub_category") @db.VarChar(100)
+  brand           String    @db.VarChar(100)
+  model           String    @db.VarChar(100)
+  modelNumber     String?   @map("model_number") @db.VarChar(100)
+  condition       String    @db.VarChar(50)
+  storage         String?   @db.VarChar(50)
+  ram             String?   @db.VarChar(50)
+  processor       String?   @db.VarChar(100)
+  operatingSystem String?   @map("operating_system") @db.VarChar(50)
+  screenSize      Decimal?  @map("screen_size") @db.Decimal(5, 2)
+  resolution      String?   @db.VarChar(50)
+  displayType     String?   @map("display_type") @db.VarChar(50)
+  capacity        String?   @db.VarChar(50)
+  energyRating    String?   @map("energy_rating") @db.VarChar(10)
+  wattage         Int?
+  color           String?   @db.VarChar(50)
+  weight          Decimal?  @db.Decimal(10, 2)
+  lengthCm        Decimal?  @map("length_cm") @db.Decimal(10, 2)
+  widthCm         Decimal?  @map("width_cm") @db.Decimal(10, 2)
+  heightCm        Decimal?  @map("height_cm") @db.Decimal(10, 2)
+  warrantyStatus  String?   @map("warranty_status") @db.VarChar(50)
   warrantyExpiry  DateTime? @map("warranty_expiry")
   purchaseDate    DateTime? @map("purchase_date")
-  
-  // Accessories
-  hasOriginalBox  Boolean? @map("has_original_box")
-  hasCharger      Boolean? @map("has_charger")
-  accessories     Json?                      // ["Charger", "Case", "Earphones"]
-  
-  // Additional
-  imeiNumber      String?  @map("imei_number") @db.VarChar(20)  // For phones (optional/hidden)
-  serialNumber    String?  @map("serial_number") @db.VarChar(100)
-  
-  features        Json?                      // Additional features
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  hasOriginalBox  Boolean?  @map("has_original_box")
+  hasCharger      Boolean?  @map("has_charger")
+  accessories     Json?
+  imeiNumber      String?   @map("imei_number") @db.VarChar(20)
+  serialNumber    String?   @map("serial_number") @db.VarChar(100)
+  features        Json?
+  images          Json?
+  images_s3_keys  Json?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  listing         Listing   @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([subCategory])
   @@index([brand])
@@ -526,63 +368,37 @@ model ElectronicListing {
   @@map("electronic_listings")
 }
 
-
-// ===========================================
-// 6. FURNITURE TABLE (category_id = 6)
-// ===========================================
-
 model FurnitureListing {
-  id              Int      @id @default(autoincrement())
-  listingId       Int      @unique @map("listing_id")
-  
-  // Sub-category
-  subCategory     String   @map("sub_category") @db.VarChar(100)  // Sofa, Bed, Dining Table, Wardrobe, Desk, Chair, Cabinet, etc.
-  
-  // Condition & Style
-  condition       String   @db.VarChar(50)   // New, Like New, Used - Excellent, Used - Good, Used - Fair
-  style           String?  @db.VarChar(50)   // Modern, Classic, Contemporary, Traditional, Industrial
-  
-  // Material
-  primaryMaterial String?  @map("primary_material") @db.VarChar(100)  // Solid Wood, MDF, Metal, Glass, Leather, Fabric
-  secondaryMaterial String? @map("secondary_material") @db.VarChar(100)
-  woodType        String?  @map("wood_type") @db.VarChar(50)  // Oak, Teak, Pine, Walnut, etc.
-  
-  // Color & Finish
-  color           String?  @db.VarChar(50)
-  finish          String?  @db.VarChar(50)   // Matte, Glossy, Natural, Polished
-  
-  // Dimensions (cm)
-  lengthCm        Decimal? @map("length_cm") @db.Decimal(10, 2)
-  widthCm         Decimal? @map("width_cm") @db.Decimal(10, 2)
-  heightCm        Decimal? @map("height_cm") @db.Decimal(10, 2)
-  weight          Decimal? @db.Decimal(10, 2)  // kg
-  
-  // For Seating
-  seatingCapacity Int?     @map("seating_capacity")  // Number of seats
-  
-  // For Beds
-  bedSize         String?  @map("bed_size") @db.VarChar(50)  // Single, Double, Queen, King, Super King
-  mattressIncluded Boolean? @map("mattress_included")
-  
-  // For Storage
-  numberOfDrawers Int?     @map("number_of_drawers")
-  numberOfShelves Int?     @map("number_of_shelves")
-  storageCapacity String?  @map("storage_capacity") @db.VarChar(50)
-  
-  // Assembly & Delivery
-  assemblyRequired Boolean? @map("assembly_required")
+  id                Int      @id @default(autoincrement())
+  listingId         Int      @unique @map("listing_id")
+  subCategory       String   @map("sub_category") @db.VarChar(100)
+  condition         String   @db.VarChar(50)
+  style             String?  @db.VarChar(50)
+  primaryMaterial   String?  @map("primary_material") @db.VarChar(100)
+  secondaryMaterial String?  @map("secondary_material") @db.VarChar(100)
+  woodType          String?  @map("wood_type") @db.VarChar(50)
+  color             String?  @db.VarChar(50)
+  finish            String?  @db.VarChar(50)
+  lengthCm          Decimal? @map("length_cm") @db.Decimal(10, 2)
+  widthCm           Decimal? @map("width_cm") @db.Decimal(10, 2)
+  heightCm          Decimal? @map("height_cm") @db.Decimal(10, 2)
+  weight            Decimal? @db.Decimal(10, 2)
+  seatingCapacity   Int?     @map("seating_capacity")
+  bedSize           String?  @map("bed_size") @db.VarChar(50)
+  mattressIncluded  Boolean? @map("mattress_included")
+  numberOfDrawers   Int?     @map("number_of_drawers")
+  numberOfShelves   Int?     @map("number_of_shelves")
+  storageCapacity   String?  @map("storage_capacity") @db.VarChar(50)
+  assemblyRequired  Boolean? @map("assembly_required")
   deliveryAvailable Boolean? @map("delivery_available")
-  
-  // Additional
-  brand           String?  @db.VarChar(100)  // IKEA, Home Centre, etc.
-  setOf           Int?     @map("set_of")    // If selling as a set (e.g., 4 chairs)
-  
-  features        Json?                      // ["Reclining", "Storage", "Convertible"]
-  
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
-  
-  listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  brand             String?  @db.VarChar(100)
+  setOf             Int?     @map("set_of")
+  features          Json?
+  images            Json?
+  images_s3_keys    Json?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+  listing           Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([subCategory])
   @@index([condition])
@@ -590,19 +406,13 @@ model FurnitureListing {
   @@map("furniture_listings")
 }
 
-
-// ===========================================
-// FAVORITES & RECENTLY VIEWED
-// ===========================================
-
 model Favorite {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   listingId Int      @map("listing_id")
   createdAt DateTime @default(now()) @map("created_at")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, listingId])
   @@index([userId])
@@ -615,20 +425,15 @@ model RecentlyViewed {
   userId    Int      @map("user_id")
   listingId Int      @map("listing_id")
   viewedAt  DateTime @default(now()) @map("viewed_at")
-  
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, listingId])
   @@index([userId])
   @@index([viewedAt])
+  @@index([listingId], map: "recently_viewed_listing_id_fkey")
   @@map("recently_viewed")
 }
-
-
-// ===========================================
-// CHAT MODELS
-// ===========================================
 
 model ChatRoom {
   id        Int           @id @default(autoincrement())
@@ -639,11 +444,10 @@ model ChatRoom {
   blockedBy Int?          @map("blocked_by")
   createdAt DateTime      @default(now()) @map("created_at")
   updatedAt DateTime      @updatedAt @map("updated_at")
-  
-  listing   Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
-  buyer     User          @relation("BuyerChats", fields: [buyerId], references: [id])
-  seller    User          @relation("SellerChats", fields: [sellerId], references: [id])
   messages  ChatMessage[]
+  buyer     User          @relation("BuyerChats", fields: [buyerId], references: [id])
+  listing   Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  seller    User          @relation("SellerChats", fields: [sellerId], references: [id])
 
   @@unique([listingId, buyerId, sellerId])
   @@index([buyerId])
@@ -653,18 +457,17 @@ model ChatRoom {
 }
 
 model ChatMessage {
-  id         Int       @id @default(autoincrement())
-  roomId     Int       @map("room_id")
-  senderId   Int       @map("sender_id")
-  content    String    @db.Text
-  isRead     Boolean   @default(false) @map("is_read")
-  readAt     DateTime? @map("read_at")
-  isDeleted  Boolean   @default(false) @map("is_deleted")
-  deletedAt  DateTime? @map("deleted_at")
-  createdAt  DateTime  @default(now()) @map("created_at")
-  
-  room       ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  sender     User      @relation(fields: [senderId], references: [id])
+  id        Int       @id @default(autoincrement())
+  roomId    Int       @map("room_id")
+  senderId  Int       @map("sender_id")
+  content   String    @db.Text
+  isRead    Boolean   @default(false) @map("is_read")
+  readAt    DateTime? @map("read_at")
+  isDeleted Boolean   @default(false) @map("is_deleted")
+  deletedAt DateTime? @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  room      ChatRoom  @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender    User      @relation(fields: [senderId], references: [id])
 
   @@index([roomId])
   @@index([senderId])
@@ -672,11 +475,6 @@ model ChatMessage {
   @@index([isRead])
   @@map("chat_messages")
 }
-
-
-// ===========================================
-// REPORT MODELS
-// ===========================================
 
 model ReportedUser {
   id             Int          @id @default(autoincrement())
@@ -688,7 +486,6 @@ model ReportedUser {
   reviewedBy     Int?         @map("reviewed_by")
   reviewedAt     DateTime?    @map("reviewed_at")
   createdAt      DateTime     @default(now()) @map("created_at")
-  
   reportedUser   User         @relation("ReportedUser", fields: [reportedUserId], references: [id])
   reporter       User         @relation("Reporter", fields: [reporterId], references: [id])
 
@@ -708,7 +505,6 @@ model ReportedListing {
   reviewedBy Int?         @map("reviewed_by")
   reviewedAt DateTime?    @map("reviewed_at")
   createdAt  DateTime     @default(now()) @map("created_at")
-  
   listing    Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
   reporter   User         @relation(fields: [reporterId], references: [id])
 
@@ -718,30 +514,15 @@ model ReportedListing {
   @@map("reported_listings")
 }
 
-enum ReportStatus {
-  pending
-  reviewed
-  dismissed
-  actioned
-
-  @@map("report_status")
-}
-
-
-// ===========================================
-// FRAUD & LOGS
-// ===========================================
-
 model FraudLog {
-  id        Int      @id @default(autoincrement())
-  userId    Int?     @map("user_id")
-  type      String   @db.VarChar(100)
-  details   Json
-  riskScore Int      @map("risk_score")
-  isReviewed Boolean @default(false) @map("is_reviewed")
-  createdAt DateTime @default(now()) @map("created_at")
-  
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  id         Int      @id @default(autoincrement())
+  userId     Int?     @map("user_id")
+  type       String   @db.VarChar(100)
+  details    Json
+  riskScore  Int      @map("risk_score")
+  isReviewed Boolean  @default(false) @map("is_reviewed")
+  createdAt  DateTime @default(now()) @map("created_at")
+  user       User?    @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([type])
@@ -763,11 +544,6 @@ model SearchLog {
   @@map("search_logs")
 }
 
-
-// ===========================================
-// SUPPORT MODELS
-// ===========================================
-
 model SupportTicket {
   id        Int                    @id @default(autoincrement())
   userId    Int?                   @map("user_id")
@@ -777,9 +553,8 @@ model SupportTicket {
   priority  TicketPriority         @default(medium)
   createdAt DateTime               @default(now()) @map("created_at")
   updatedAt DateTime               @updatedAt @map("updated_at")
-  
-  user      User?                  @relation(fields: [userId], references: [id], onDelete: SetNull)
   messages  SupportTicketMessage[]
+  user      User?                  @relation(fields: [userId], references: [id])
 
   @@index([userId])
   @@index([status])
@@ -792,16 +567,368 @@ model SupportTicketMessage {
   id         Int           @id @default(autoincrement())
   ticketId   Int           @map("ticket_id")
   senderId   Int?          @map("sender_id")
-  senderType String        @map("sender_type") @db.VarChar(20)  // user, admin
+  senderType String        @map("sender_type") @db.VarChar(20)
   message    String        @db.Text
   createdAt  DateTime      @default(now()) @map("created_at")
-  
+  sender     User?         @relation(fields: [senderId], references: [id])
   ticket     SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  sender     User?         @relation(fields: [senderId], references: [id], onDelete: SetNull)
 
   @@index([ticketId])
   @@index([senderId])
   @@map("support_ticket_messages")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    Int              @map("user_id")
+  type      NotificationType
+  title     String           @db.VarChar(255)
+  message   String           @db.Text
+  data      Json?
+  isRead    Boolean          @default(false) @map("is_read")
+  readAt    DateTime?        @map("read_at")
+  createdAt DateTime         @default(now()) @map("created_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model SystemConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique @db.VarChar(100)
+  value     String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("system_config")
+}
+
+model Designer {
+  id                 Int                 @id @default(autoincrement())
+  userId             Int                 @unique @map("user_id")
+  bio                String              @db.Text
+  tagline            String?             @db.VarChar(255)
+  location           String              @db.VarChar(200)
+  city               String?             @db.VarChar(100)
+  country            String?             @db.VarChar(100)
+  latitude           Decimal?            @db.Decimal(10, 8)
+  longitude          Decimal?            @db.Decimal(11, 8)
+  serviceRadius      Int?                @map("service_radius")
+  services           Json
+  specializations    Json?
+  hourlyRate         Decimal?            @map("hourly_rate") @db.Decimal(10, 2)
+  consultationFee    Decimal?            @map("consultation_fee") @db.Decimal(10, 2)
+  currency           String              @default("AED") @db.VarChar(10)
+  photos             Json?
+  portfolioUrl       String?             @map("portfolio_url") @db.VarChar(500)
+  yearsExperience    Int?                @map("years_experience")
+  certifications     Json?
+  education          String?             @db.Text
+  languages          Json?
+  availableDays      Json?               @map("available_days")
+  availableTimeStart String?             @map("available_time_start") @db.VarChar(10)
+  availableTimeEnd   String?             @map("available_time_end") @db.VarChar(10)
+  isAvailable        Boolean             @default(true) @map("is_available")
+  rating             Decimal             @default(0.00) @db.Decimal(3, 2)
+  totalReviews       Int                 @default(0) @map("total_reviews")
+  completedProjects  Int                 @default(0) @map("completed_projects")
+  isVerified         Boolean             @default(false) @map("is_verified")
+  verifiedAt         DateTime?           @map("verified_at")
+  isActive           Boolean             @default(true) @map("is_active")
+  isFeatured         Boolean             @default(false) @map("is_featured")
+  featuredUntil      DateTime?           @map("featured_until")
+  isDeleted          Boolean             @default(false) @map("is_deleted")
+  deletedAt          DateTime?           @map("deleted_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  bookings           DesignerBooking[]
+  portfolioItems     DesignerPortfolio[]
+  reviews            DesignerReview[]
+  user               User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([location])
+  @@index([city])
+  @@index([isActive])
+  @@index([isVerified])
+  @@index([rating])
+  @@index([createdAt])
+  @@map("designers")
+}
+
+model DesignerPortfolio {
+  id           Int       @id @default(autoincrement())
+  designerId   Int       @map("designer_id")
+  title        String    @db.VarChar(255)
+  description  String?   @db.Text
+  projectType  String    @map("project_type") @db.VarChar(100)
+  style        String?   @db.VarChar(100)
+  images       Json
+  beforeImages Json?     @map("before_images")
+  afterImages  Json?     @map("after_images")
+  location     String?   @db.VarChar(200)
+  area         Int?
+  budget       String?   @db.VarChar(100)
+  duration     String?   @db.VarChar(100)
+  completedAt  DateTime? @map("completed_at")
+  tags         Json?
+  isFeatured   Boolean   @default(false) @map("is_featured")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  designer     Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
+
+  @@index([designerId])
+  @@index([projectType])
+  @@map("designer_portfolios")
+}
+
+model DesignerBooking {
+  id                 Int             @id @default(autoincrement())
+  designerId         Int             @map("designer_id")
+  userId             Int             @map("user_id")
+  dateTime           DateTime        @map("date_time")
+  duration           Int             @default(60)
+  endTime            DateTime?       @map("end_time")
+   userName            String?   @map("user_name") @db.VarChar(100)
+  userAddress         String?   @map("user_address") @db.VarChar(500)
+  userPhone           String?   @map("user_phone") @db.VarChar(20)
+  bookingType        String          @map("booking_type") @db.VarChar(50)
+  status             BookingStatus   @default(pending)
+  userNotes          String?         @map("user_notes") @db.Text
+  designerNotes      String?         @map("designer_notes") @db.Text
+  cancelledBy        Int?            @map("cancelled_by")
+  cancelledAt        DateTime?       @map("cancelled_at")
+  cancellationReason String?         @map("cancellation_reason") @db.Text
+  rejectionReason    String?         @map("rejection_reason") @db.Text
+  meetingType        String?         @map("meeting_type") @db.VarChar(50)
+  meetingLocation    String?         @map("meeting_location") @db.Text
+  meetingLink        String?         @map("meeting_link") @db.VarChar(500)
+  fee                Decimal?        @db.Decimal(10, 2)
+  currency           String          @default("AED") @db.VarChar(10)
+  isPaid             Boolean         @default(false) @map("is_paid")
+  paidAt             DateTime?       @map("paid_at")
+  confirmedAt        DateTime?       @map("confirmed_at")
+   projectType         String?   @map("project_type") @db.VarChar(100)
+  projectDescription  String?   @map("project_description") @db.Text
+  completedAt        DateTime?       @map("completed_at")
+  reminderSent       Boolean         @default(false) @map("reminder_sent")
+  reminderSentAt     DateTime?       @map("reminder_sent_at")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  designer           Designer        @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review             DesignerReview?
+
+  @@index([designerId])
+  @@index([userId])
+  @@index([status])
+  @@index([dateTime])
+  @@index([createdAt])
+  @@map("designer_bookings")
+}
+
+model JobApplication {
+  id                 Int                      @id @default(autoincrement())
+  
+  // Relations
+  jobListingId       Int                      @map("job_listing_id")
+  userId             Int                      @map("user_id")
+  
+  // Applicant Information
+  name               String                   @db.VarChar(100)
+  dob                DateTime?                @db.Date
+  email              String                   @db.VarChar(255)
+  mobileNo           String                   @map("mobile_no") @db.VarChar(20)
+  languages          Json?                    // Array of languages
+  nationality        String?                  @db.VarChar(100)
+  location           String?                  @db.VarChar(200)
+  visaStatus         JobApplicationVisaStatus? @map("visa_status")
+  
+  // Resume
+  resumeUrl          String?                  @map("resume_url") @db.VarChar(500)
+  resumeS3Key        String?                  @map("resume_s3_key") @db.VarChar(500)
+  
+  // Qualifications
+  qualification      String?                  @db.VarChar(255)
+  jobStatus          JobApplicationJobStatus  @map("job_status")
+  yearsOfExperience  Int?                     @map("years_of_experience")
+  
+  // Salary
+  salaryExpectation  Decimal?                 @map("salary_expectation") @db.Decimal(12, 2)
+  salaryCurrency     String                   @default("AED") @map("salary_currency") @db.VarChar(10)
+  
+  // Additional Info
+  coverLetter        String?                  @map("cover_letter") @db.Text
+  portfolioUrl       String?                  @map("portfolio_url") @db.VarChar(500)
+  linkedinUrl        String?                  @map("linkedin_url") @db.VarChar(500)
+  
+  // Application Status
+  status             JobApplicationStatus     @default(pending)
+  employerNotes      String?                  @map("employer_notes") @db.Text
+  reviewedAt         DateTime?                @map("reviewed_at")
+  reviewedBy         Int?                     @map("reviewed_by")
+  
+  // Timestamps
+  createdAt          DateTime                 @default(now()) @map("created_at")
+  updatedAt          DateTime                 @updatedAt @map("updated_at")
+  
+  // Relations
+  jobListing         Listing                  @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
+  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@unique([jobListingId, userId], name: "unique_user_job_application")
+  @@index([jobListingId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([jobListingId, status], name: "idx_job_status")
+  @@map("job_applications")
+}
+
+// Enums
+
+enum JobApplicationVisaStatus {
+  not_applicable
+  business
+  residence
+  employment
+  spouse
+  student
+  tourist
+  visit
+  
+  @@map("job_application_visa_status")
+}
+
+enum JobApplicationJobStatus {
+  fresher
+  experienced
+  
+  @@map("job_application_job_status")
+}
+
+enum JobApplicationStatus {
+  pending
+  reviewing
+  shortlisted
+  rejected
+  accepted
+  
+  @@map("job_application_status")
+}
+model DesignerReview {
+  id                    Int              @id @default(autoincrement())
+  designerId            Int              @map("designer_id")
+  userId                Int              @map("user_id")
+  bookingId             Int?             @unique @map("booking_id")
+  rating                Int
+  communicationRating   Int?             @map("communication_rating")
+  professionalismRating Int?             @map("professionalism_rating")
+  qualityRating         Int?             @map("quality_rating")
+  valueRating           Int?             @map("value_rating")
+  title                 String?          @db.VarChar(255)
+  comment               String           @db.Text
+  photos                Json?
+  response              String?          @db.Text
+  respondedAt           DateTime?        @map("responded_at")
+  isApproved            Boolean          @default(false) @map("is_approved")
+  approvedAt            DateTime?        @map("approved_at")
+  approvedBy            Int?             @map("approved_by")
+  isHidden              Boolean          @default(false) @map("is_hidden")
+  hiddenReason          String?          @map("hidden_reason") @db.VarChar(255)
+  helpfulCount          Int              @default(0) @map("helpful_count")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  booking               DesignerBooking? @relation(fields: [bookingId], references: [id])
+  designer              Designer         @relation(fields: [designerId], references: [id], onDelete: Cascade)
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([designerId])
+  @@index([userId])
+  @@index([rating])
+  @@index([isApproved])
+  @@index([createdAt])
+  @@map("designer_reviews")
+}
+
+model admin_notes {
+  id          Int      @id @default(autoincrement())
+  listing_id  Int
+  admin_id    Int
+  content     String   @db.Text
+  is_internal Boolean  @default(true)
+  created_at  DateTime @default(now())
+  updated_at  DateTime
+  users       User     @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  listings    Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+
+  @@index([admin_id])
+  @@index([created_at])
+  @@index([listing_id])
+}
+
+model audit_logs {
+  id            Int      @id @default(autoincrement())
+  actor_user_id Int?
+  action        String   @db.VarChar(100)
+  entity_type   String?  @db.VarChar(50)
+  entity_id     Int?
+  metadata      Json?
+  ip_address    String?  @db.VarChar(50)
+  device_info   Json?
+  created_at    DateTime @default(now())
+  users         User?    @relation(fields: [actor_user_id], references: [id])
+
+  @@index([action])
+  @@index([actor_user_id])
+  @@index([created_at])
+  @@index([entity_type, entity_id])
+}
+
+model permissions {
+  id               Int                @id @default(autoincrement())
+  name             String             @unique @db.VarChar(100)
+  description      String?            @db.VarChar(255)
+  category         String?            @db.VarChar(50)
+  created_at       DateTime           @default(now())
+  role_permissions role_permissions[]
+}
+
+model role_permissions {
+  id            Int         @id @default(autoincrement())
+  role_id       Int
+  permission_id Int
+  created_at    DateTime    @default(now())
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+  roles         Role        @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
+  @@index([permission_id])
+  @@index([role_id])
+}
+
+enum ListingStatus {
+  draft
+  pending
+  approved
+  rejected
+  sold
+  expired
+  completed
+
+  @@map("listing_status")
+}
+
+enum ReportStatus {
+  pending
+  reviewed
+  dismissed
+  actioned
+
+  @@map("report_status")
 }
 
 enum TicketStatus {
@@ -820,30 +947,6 @@ enum TicketPriority {
   urgent
 
   @@map("ticket_priority")
-}
-
-
-// ===========================================
-// NOTIFICATION MODEL
-// ===========================================
-
-model Notification {
-  id        Int              @id @default(autoincrement())
-  userId    Int              @map("user_id")
-  type      NotificationType
-  title     String           @db.VarChar(255)
-  message   String           @db.Text
-  data      Json?
-  isRead    Boolean          @default(false) @map("is_read")
-  readAt    DateTime?        @map("read_at")
-  createdAt DateTime         @default(now()) @map("created_at")
-  
-  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([userId, isRead])
-  @@index([createdAt])
-  @@map("notifications")
 }
 
 enum NotificationType {
@@ -866,215 +969,6 @@ enum NotificationType {
   @@map("notification_type")
 }
 
-
-// ===========================================
-// SYSTEM CONFIGURATION
-// ===========================================
-
-model SystemConfig {
-  id        Int      @id @default(autoincrement())
-  key       String   @unique @db.VarChar(100)
-  value     String   @db.Text
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  @@map("system_config")
-}
-
-
-// ===========================================
-// INTERIOR DESIGNER MODEL
-// ===========================================
-
-model Designer {
-  id                  Int       @id @default(autoincrement())
-  userId              Int       @unique @map("user_id")
-  
-  // Profile Information
-  bio                 String    @db.Text
-  tagline             String?   @db.VarChar(255)
-  
-  // Location
-  location            String    @db.VarChar(200)
-  city                String?   @db.VarChar(100)
-  country             String?   @db.VarChar(100)
-  latitude            Decimal?  @db.Decimal(10, 8)
-  longitude           Decimal?  @db.Decimal(11, 8)
-  serviceRadius       Int?      @map("service_radius")  // km radius for service area
-  
-  // Services & Specializations
-  services            Json                              // ["Residential", "Commercial", "Consultation"]
-  specializations     Json?                             // ["Modern", "Classic", "Minimalist", "Industrial"]
-  
-  // Pricing
-  hourlyRate          Decimal?  @map("hourly_rate") @db.Decimal(10, 2)
-  consultationFee     Decimal?  @map("consultation_fee") @db.Decimal(10, 2)
-  currency            String    @default("AED") @db.VarChar(10)
-  
-  // Portfolio Photos
-  photos              Json?                             // Array of photo URLs
-  portfolioUrl        String?   @map("portfolio_url") @db.VarChar(500)
-  
-  // Professional Info
-  yearsExperience     Int?      @map("years_experience")
-  certifications      Json?                             // ["ASID", "NCIDQ", etc.]
-  education           String?   @db.Text
-  languages           Json?                             // ["English", "Arabic", "Hindi"]
-  
-  // Availability
-  availableDays       Json?     @map("available_days")  // ["Monday", "Tuesday", ...]
-  availableTimeStart  String?   @map("available_time_start") @db.VarChar(10)  // "09:00"
-  availableTimeEnd    String?   @map("available_time_end") @db.VarChar(10)    // "18:00"
-  isAvailable         Boolean   @default(true) @map("is_available")
-  
-  // Ratings & Stats
-  rating              Decimal   @default(0) @db.Decimal(3, 2)
-  totalReviews        Int       @default(0) @map("total_reviews")
-  completedProjects   Int       @default(0) @map("completed_projects")
-  
-  // Verification & Status
-  isVerified          Boolean   @default(false) @map("is_verified")
-  verifiedAt          DateTime? @map("verified_at")
-  isActive            Boolean   @default(true) @map("is_active")
-  isFeatured          Boolean   @default(false) @map("is_featured")
-  featuredUntil       DateTime? @map("featured_until")
-  
-  // Soft delete
-  isDeleted           Boolean   @default(false) @map("is_deleted")
-  deletedAt           DateTime? @map("deleted_at")
-  
-  // Timestamps
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  bookings            DesignerBooking[]
-  reviews             DesignerReview[]
-  portfolioItems      DesignerPortfolio[]
-
-  @@index([userId])
-  @@index([location])
-  @@index([city])
-  @@index([isActive])
-  @@index([isVerified])
-  @@index([rating])
-  @@index([createdAt])
-  @@map("designers")
-}
-
-
-// ===========================================
-// DESIGNER PORTFOLIO MODEL
-// ===========================================
-
-model DesignerPortfolio {
-  id              Int       @id @default(autoincrement())
-  designerId      Int       @map("designer_id")
-  
-  // Project Details
-  title           String    @db.VarChar(255)
-  description     String?   @db.Text
-  projectType     String    @map("project_type") @db.VarChar(100)  // Residential, Commercial, Office
-  style           String?   @db.VarChar(100)  // Modern, Classic, etc.
-  
-  // Images
-  images          Json                        // Array of image URLs
-  beforeImages    Json?     @map("before_images")
-  afterImages     Json?     @map("after_images")
-  
-  // Project Info
-  location        String?   @db.VarChar(200)
-  area            Int?                        // sq.ft or sq.m
-  budget          String?   @db.VarChar(100)  // Budget range
-  duration        String?   @db.VarChar(100)  // "3 months"
-  completedAt     DateTime? @map("completed_at")
-  
-  // Additional
-  tags            Json?                       // ["kitchen", "bathroom", "living room"]
-  isFeatured      Boolean   @default(false) @map("is_featured")
-  
-  // Timestamps
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  designer        Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
-
-  @@index([designerId])
-  @@index([projectType])
-  @@map("designer_portfolios")
-}
-
-
-// ===========================================
-// DESIGNER BOOKING MODEL
-// ===========================================
-
-model DesignerBooking {
-  id                  Int       @id @default(autoincrement())
-  
-  // Parties
-  designerId          Int       @map("designer_id")
-  userId              Int       @map("user_id")
-  
-  // Booking Details
-  dateTime            DateTime  @map("date_time")
-  duration            Int       @default(60)              // minutes
-  endTime             DateTime? @map("end_time")
-  
-  // Booking Type
-  bookingType         String    @map("booking_type") @db.VarChar(50)  // consultation, site_visit, design_session
-  
-  // Status
-  status              BookingStatus @default(pending)
-  
-  // Notes & Communication
-  userNotes           String?   @map("user_notes") @db.Text
-  designerNotes       String?   @map("designer_notes") @db.Text
-  
-  // Cancellation/Rejection
-  cancelledBy         Int?      @map("cancelled_by")
-  cancelledAt         DateTime? @map("cancelled_at")
-  cancellationReason  String?   @map("cancellation_reason") @db.Text
-  rejectionReason     String?   @map("rejection_reason") @db.Text
-  
-  // Location Details (for site visits)
-  meetingType         String?   @map("meeting_type") @db.VarChar(50)  // online, in_person
-  meetingLocation     String?   @map("meeting_location") @db.Text
-  meetingLink         String?   @map("meeting_link") @db.VarChar(500)
-  
-  // Pricing
-  fee                 Decimal?  @db.Decimal(10, 2)
-  currency            String    @default("AED") @db.VarChar(10)
-  isPaid              Boolean   @default(false) @map("is_paid")
-  paidAt              DateTime? @map("paid_at")
-  
-  // Confirmation
-  confirmedAt         DateTime? @map("confirmed_at")
-  completedAt         DateTime? @map("completed_at")
-  
-  // Reminders
-  reminderSent        Boolean   @default(false) @map("reminder_sent")
-  reminderSentAt      DateTime? @map("reminder_sent_at")
-  
-  // Timestamps
-  createdAt           DateTime  @default(now()) @map("created_at")
-  updatedAt           DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  designer            Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
-  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  review              DesignerReview?
-
-  @@index([designerId])
-  @@index([userId])
-  @@index([status])
-  @@index([dateTime])
-  @@index([createdAt])
-  @@map("designer_bookings")
-}
-
 enum BookingStatus {
   pending
   confirmed
@@ -1084,62 +978,4 @@ enum BookingStatus {
   no_show
 
   @@map("booking_status")
-}
-
-
-// ===========================================
-// DESIGNER REVIEW MODEL
-// ===========================================
-
-model DesignerReview {
-  id              Int       @id @default(autoincrement())
-  
-  // Relations
-  designerId      Int       @map("designer_id")
-  userId          Int       @map("user_id")
-  bookingId       Int?      @unique @map("booking_id")
-  
-  // Ratings (1-5)
-  rating          Int                        // Overall rating
-  communicationRating Int?  @map("communication_rating")
-  professionalismRating Int? @map("professionalism_rating")
-  qualityRating   Int?      @map("quality_rating")
-  valueRating     Int?      @map("value_rating")
-  
-  // Review Content
-  title           String?   @db.VarChar(255)
-  comment         String    @db.Text
-  
-  // Photos (before/after, completed work)
-  photos          Json?
-  
-  // Designer Response
-  response        String?   @db.Text
-  respondedAt     DateTime? @map("responded_at")
-  
-  // Moderation
-  isApproved      Boolean   @default(false) @map("is_approved")
-  approvedAt      DateTime? @map("approved_at")
-  approvedBy      Int?      @map("approved_by")
-  isHidden        Boolean   @default(false) @map("is_hidden")
-  hiddenReason    String?   @map("hidden_reason") @db.VarChar(255)
-  
-  // Helpful votes
-  helpfulCount    Int       @default(0) @map("helpful_count")
-  
-  // Timestamps
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-
-  // Relations
-  designer        Designer  @relation(fields: [designerId], references: [id], onDelete: Cascade)
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  booking         DesignerBooking? @relation(fields: [bookingId], references: [id])
-
-  @@index([designerId])
-  @@index([userId])
-  @@index([rating])
-  @@index([isApproved])
-  @@index([createdAt])
-  @@map("designer_reviews")
 }
