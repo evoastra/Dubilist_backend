@@ -1,378 +1,281 @@
 // ===========================================
-// ADMIN SERVICE & ROUTES
+// ADMIN ROUTES - All Admin Endpoints
 // ===========================================
 
 const express = require('express');
 const router = express.Router();
-const { prisma } = require('../../config/database');
-const { logger } = require('../../config/logger');
-const { env } = require('../../config/env');
-const { ApiError, asyncHandler } = require('../../middleware/errorHandler');
-const { successResponse, paginatedResponse } = require('../../utils/response');
+const adminController = require('./admin.controller');
 const { authenticate } = require('../../middleware/authMiddleware');
-const { requireAdmin, requireModerator } = require('../../middleware/roleMiddleware');
-const { generateTokenPair } = require('../../utils/token');
-const { setMaintenanceMode } = require('../../middleware/maintenanceMode');
-const { validateBody, validateQuery, Joi } = require('../../middleware/validation');
-const { comparePassword } = require('../../utils/crypto');
-const { getDeviceInfo } = require('../../middleware/deviceTracking');
+const { requireAdmin } = require('../../middleware/roleMiddleware');
+const { validate } = require('./admin.validation');
+const {
+  loginSchema,
+  getUsersQuerySchema,
+  blockUserSchema,
+  updateRoleSchema,
+  postingRestrictionSchema,
+  auditLogsQuerySchema,
+  suspendListingSchema,
+  getListingsQuerySchema,
+  updateListingStatusSchema,
+  getReportsQuerySchema,
+  updateReportStatusSchema,
+  getSupportTicketsQuerySchema,
+  replyToTicketSchema,
+  getAnalyticsOverviewQuerySchema,
+  getPopularSearchesQuerySchema,
+  getFraudLogsQuerySchema,
+  createCategorySchema,
+  updateCategorySchema,
+  updateSystemConfigSchema
+} = require('./admin.validation');
 
-class AdminService {
-  // Admin login
-  async adminLogin(email, password, deviceInfo) {
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: { role: true },
-    });
+// ==========================================
+// PUBLIC ROUTES (No Auth Required)
+// ==========================================
 
-    if (!user || !['admin', 'moderator'].includes(user.role.name)) {
-      throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid admin credentials');
-    }
+/**
+ * @route   POST /api/admin/login
+ * @desc    Admin login
+ * @access  Public
+ */
+router.post('/login', validate(loginSchema), adminController.login);
 
-    const isValidPassword = await comparePassword(password, user.passwordHash);
-    if (!isValidPassword) {
-      throw new ApiError(401, 'INVALID_CREDENTIALS', 'Invalid admin credentials');
-    }
+// ==========================================
+// PROTECTED ROUTES (Admin Only)
+// ==========================================
 
-    const tokens = await generateTokenPair(user);
-
-    // Log admin login
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: user.id,
-        action: 'ADMIN_LOGIN',
-        entityType: 'user',
-        entityId: user.id,
-        ipAddress: deviceInfo?.ipAddress || 'unknown',
-        deviceInfo: deviceInfo || {},
-      },
-    });
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLoginAt: new Date() },
-    });
-
-    logger.info({ userId: user.id, email: user.email }, 'Admin logged in');
-
-    return {
-      user: {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        role: user.role.name,
-      },
-      tokens,
-    };
-  }
-
-  // Get all users
-  async getUsers(options = {}) {
-    const { page = 1, limit = 20, role, isBlocked, search } = options;
-    const skip = (page - 1) * limit;
-
-    const where = { isDeleted: false };
-    if (role) {
-      const roleRecord = await prisma.role.findFirst({ where: { name: role } });
-      if (roleRecord) where.roleId = roleRecord.id;
-    }
-    if (isBlocked !== undefined) where.isBlocked = isBlocked === 'true';
-    if (search) {
-      where.OR = [
-        { name: { contains: search, mode: 'insensitive' } },
-        { email: { contains: search, mode: 'insensitive' } },
-      ];
-    }
-
-    const [users, total] = await Promise.all([
-      prisma.user.findMany({
-        where,
-        include: {
-          role: true,
-          _count: { select: { listings: true } },
-        },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.user.count({ where }),
-    ]);
-
-    return {
-      data: users.map(u => ({
-        ...u,
-        passwordHash: undefined,
-        listingsCount: u._count.listings,
-      })),
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  // Block/unblock user
-  async toggleBlockUser(userId, adminId, block) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { isBlocked: block },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: adminId,
-        action: block ? 'USER_BLOCKED' : 'USER_UNBLOCKED',
-        entityType: 'user',
-        entityId: userId,
-        ipAddress: 'admin',
-      },
-    });
-
-    logger.info({ userId, adminId, action: block ? 'blocked' : 'unblocked' }, 'User block status changed');
-    return { message: `User ${block ? 'blocked' : 'unblocked'}` };
-  }
-
-  // Restrict/unrestrict posting
-  async togglePostingRestriction(userId, adminId, restrict) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { canPostListings: !restrict },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: adminId,
-        action: restrict ? 'POSTING_RESTRICTED' : 'POSTING_UNRESTRICTED',
-        entityType: 'user',
-        entityId: userId,
-        ipAddress: 'admin',
-      },
-    });
-
-    return { message: `Posting ${restrict ? 'restricted' : 'unrestricted'}` };
-  }
-
-  // Change user role
-  async changeUserRole(userId, adminId, roleName) {
-    const role = await prisma.role.findFirst({ where: { name: roleName } });
-    if (!role) throw new ApiError(400, 'INVALID_ROLE', 'Invalid role');
-
-    const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
-
-    await prisma.user.update({
-      where: { id: userId },
-      data: { roleId: role.id },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: adminId,
-        action: 'USER_ROLE_CHANGED',
-        entityType: 'user',
-        entityId: userId,
-        metadata: { newRole: roleName },
-        ipAddress: 'admin',
-      },
-    });
-
-    return { message: `User role changed to ${roleName}` };
-  }
-
-  // Impersonate user
-  async impersonateUser(userId, adminId) {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: { role: true },
-    });
-
-    if (!user) throw new ApiError(404, 'USER_NOT_FOUND', 'User not found');
-
-    // Generate token for impersonation (short-lived)
-    const tokens = await generateTokenPair(user);
-
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: adminId,
-        action: 'USER_IMPERSONATED',
-        entityType: 'user',
-        entityId: userId,
-        ipAddress: 'admin',
-      },
-    });
-
-    logger.warn({ adminId, userId }, 'Admin impersonating user');
-
-    return { user, tokens };
-  }
-
-  // Get audit logs
-  async getAuditLogs(options = {}) {
-    const { page = 1, limit = 50, action, userId } = options;
-    const skip = (page - 1) * limit;
-
-    const where = {};
-    if (action) where.action = action;
-    if (userId) where.actorUserId = parseInt(userId, 10);
-
-    const [logs, total] = await Promise.all([
-      prisma.auditLog.findMany({
-        where,
-        include: { actor: { select: { id: true, name: true, email: true } } },
-        orderBy: { createdAt: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.auditLog.count({ where }),
-    ]);
-
-    return {
-      data: logs,
-      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
-    };
-  }
-
-  // Suspend listing
-  async suspendListing(listingId, adminId, reason) {
-    const listing = await prisma.listing.findUnique({ where: { id: listingId } });
-    if (!listing) throw new ApiError(404, 'LISTING_NOT_FOUND', 'Listing not found');
-
-    await prisma.listing.update({
-      where: { id: listingId },
-      data: { status: 'rejected', reasonRejected: reason },
-    });
-
-    await prisma.auditLog.create({
-      data: {
-        actorUserId: adminId,
-        action: 'LISTING_SUSPENDED',
-        entityType: 'listing',
-        entityId: listingId,
-        metadata: { reason },
-        ipAddress: 'admin',
-      },
-    });
-
-    return { message: 'Listing suspended' };
-  }
-
-  // Get all roles
-  async getRoles() {
-    return prisma.role.findMany({
-      include: {
-        permissions: { include: { permission: true } },
-        _count: { select: { users: true } },
-      },
-    });
-  }
-}
-
-const adminService = new AdminService();
-
-// Validation schemas
-const loginSchema = Joi.object({
-  email: Joi.string().email().required(),
-  password: Joi.string().required(),
-});
-
-const usersQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  limit: Joi.number().integer().min(1).max(100).default(20),
-  role: Joi.string().valid('admin', 'moderator', 'seller', 'buyer'),
-  isBlocked: Joi.string().valid('true', 'false'),
-  search: Joi.string().max(100),
-});
-
-const roleChangeSchema = Joi.object({
-  role: Joi.string().valid('admin', 'moderator', 'seller', 'buyer').required(),
-});
-
-const suspendSchema = Joi.object({
-  reason: Joi.string().min(10).max(500).required(),
-});
-
-const maintenanceSchema = Joi.object({
-  enabled: Joi.boolean().required(),
-});
-
-// Public admin login
-router.post('/login', validateBody(loginSchema), asyncHandler(async (req, res) => {
-  const deviceInfo = getDeviceInfo(req);
-  const result = await adminService.adminLogin(req.body.email, req.body.password, deviceInfo);
-  successResponse(res, result, 'Admin login successful');
-}));
-
-// Protected admin routes
+// Apply auth middleware to all routes below
 router.use(authenticate, requireAdmin);
 
-// Users management
-router.get('/users', validateQuery(usersQuerySchema), asyncHandler(async (req, res) => {
-  const result = await adminService.getUsers(req.query);
-  paginatedResponse(res, result);
-}));
+// ==========================================
+// DASHBOARD
+// ==========================================
 
-router.put('/users/:id/block', asyncHandler(async (req, res) => {
-  await adminService.toggleBlockUser(parseInt(req.params.id, 10), req.user.id, true);
-  successResponse(res, null, 'User blocked');
-}));
+/**
+ * @route   GET /api/admin/dashboard
+ * @desc    Get dashboard statistics
+ * @access  Admin
+ */
+router.get('/dashboard', adminController.getDashboard);
 
-router.put('/users/:id/unblock', asyncHandler(async (req, res) => {
-  await adminService.toggleBlockUser(parseInt(req.params.id, 10), req.user.id, false);
-  successResponse(res, null, 'User unblocked');
-}));
+// ==========================================
+// USER MANAGEMENT
+// ==========================================
 
-router.put('/users/:id/restrict-posting', asyncHandler(async (req, res) => {
-  await adminService.togglePostingRestriction(parseInt(req.params.id, 10), req.user.id, true);
-  successResponse(res, null, 'Posting restricted');
-}));
+/**
+ * @route   GET /api/admin/users
+ * @desc    Get all users with filters
+ * @access  Admin
+ */
+router.get('/users', validate(getUsersQuerySchema, 'query'), adminController.getUsers);
 
-router.put('/users/:id/unrestrict-posting', asyncHandler(async (req, res) => {
-  await adminService.togglePostingRestriction(parseInt(req.params.id, 10), req.user.id, false);
-  successResponse(res, null, 'Posting unrestricted');
-}));
+/**
+ * @route   GET /api/admin/users/:id
+ * @desc    Get single user details
+ * @access  Admin
+ */
+router.get('/users/:id', adminController.getUserById);
 
-router.put('/users/:id/role', validateBody(roleChangeSchema), asyncHandler(async (req, res) => {
-  await adminService.changeUserRole(parseInt(req.params.id, 10), req.user.id, req.body.role);
-  successResponse(res, null, 'Role changed');
-}));
+/**
+ * @route   PATCH /api/admin/users/:id/block
+ * @desc    Block or unblock user
+ * @access  Admin
+ */
+router.patch('/users/:id/block', validate(blockUserSchema), adminController.blockUser);
 
-router.post('/users/:id/impersonate', asyncHandler(async (req, res) => {
-  const result = await adminService.impersonateUser(parseInt(req.params.id, 10), req.user.id);
-  successResponse(res, result, 'Impersonation tokens generated');
-}));
+/**
+ * @route   PATCH /api/admin/users/:id/role
+ * @desc    Update user role
+ * @access  Admin
+ */
+router.patch('/users/:id/role', validate(updateRoleSchema), adminController.updateUserRole);
 
-// Listings management
-router.post('/listings/:id/suspend', validateBody(suspendSchema), asyncHandler(async (req, res) => {
-  await adminService.suspendListing(parseInt(req.params.id, 10), req.user.id, req.body.reason);
-  successResponse(res, null, 'Listing suspended');
-}));
+/**
+ * @route   PUT /api/admin/users/:id/restrict-posting
+ * @desc    Restrict user from posting listings
+ * @access  Admin
+ */
+router.put('/users/:id/restrict-posting', validate(postingRestrictionSchema), adminController.togglePostingRestriction);
 
-// Audit logs
-router.get('/audit-logs', asyncHandler(async (req, res) => {
-  const result = await adminService.getAuditLogs(req.query);
-  paginatedResponse(res, result);
-}));
+/**
+ * @route   PUT /api/admin/users/:id/unrestrict-posting
+ * @desc    Unrestrict user from posting listings
+ * @access  Admin
+ */
+router.put('/users/:id/unrestrict-posting', validate(postingRestrictionSchema), adminController.togglePostingRestriction);
 
-// Roles
-router.get('/roles', asyncHandler(async (req, res) => {
-  const roles = await adminService.getRoles();
-  successResponse(res, roles);
-}));
+/**
+ * @route   POST /api/admin/users/:id/impersonate
+ * @desc    Generate impersonation tokens for user
+ * @access  Admin
+ */
+router.post('/users/:id/impersonate', adminController.impersonateUser);
 
-// Maintenance mode
-router.put('/maintenance', validateBody(maintenanceSchema), asyncHandler(async (req, res) => {
-  await setMaintenanceMode(req.body.enabled);
-  await prisma.auditLog.create({
-    data: {
-      actorUserId: req.user.id,
-      action: req.body.enabled ? 'MAINTENANCE_ENABLED' : 'MAINTENANCE_DISABLED',
-      ipAddress: 'admin',
-    },
-  });
-  successResponse(res, null, `Maintenance mode ${req.body.enabled ? 'enabled' : 'disabled'}`);
-}));
+/**
+ * @route   GET /api/admin/audit-logs
+ * @desc    Get audit logs
+ * @access  Admin
+ */
+router.get('/audit-logs', validate(auditLogsQuerySchema, 'query'), adminController.getAuditLogs);
+
+// ==========================================
+// LISTING MANAGEMENT
+// ==========================================
+
+/**
+ * @route   GET /api/admin/listings
+ * @desc    Get all listings with filters
+ * @access  Admin
+ */
+router.get('/listings', validate(getListingsQuerySchema, 'query'), adminController.getListings);
+
+/**
+ * @route   PATCH /api/admin/listings/:id/status
+ * @desc    Approve or reject listing
+ * @access  Admin
+ */
+router.patch('/listings/:id/status', validate(updateListingStatusSchema), adminController.updateListingStatus);
+
+/**
+ * @route   POST /api/admin/listings/:id/suspend
+ * @desc    Suspend listing with reason
+ * @access  Admin
+ */
+router.post('/listings/:id/suspend', validate(suspendListingSchema), adminController.suspendListing);
+
+// ==========================================
+// REPORTS
+// ==========================================
+
+/**
+ * @route   GET /api/admin/reports
+ * @desc    Get all reports (listings & users)
+ * @access  Admin
+ */
+router.get('/reports', validate(getReportsQuerySchema, 'query'), adminController.getReports);
+
+/**
+ * @route   PATCH /api/admin/reports/:type/:id
+ * @desc    Update report status
+ * @access  Admin
+ */
+router.patch('/reports/:type/:id', validate(updateReportStatusSchema), adminController.updateReportStatus);
+
+// ==========================================
+// SUPPORT TICKETS
+// ==========================================
+
+/**
+ * @route   GET /api/admin/support/tickets
+ * @desc    Get all support tickets
+ * @access  Admin
+ */
+router.get('/support/tickets', validate(getSupportTicketsQuerySchema, 'query'), adminController.getSupportTickets);
+
+/**
+ * @route   POST /api/admin/support/tickets/:id/reply
+ * @desc    Reply to support ticket
+ * @access  Admin
+ */
+router.post('/support/tickets/:id/reply', validate(replyToTicketSchema), adminController.replyToTicket);
+
+// ==========================================
+// ANALYTICS
+// ==========================================
+
+/**
+ * @route   GET /api/admin/analytics/overview
+ * @desc    Get analytics overview
+ * @access  Admin
+ */
+router.get('/analytics/overview', validate(getAnalyticsOverviewQuerySchema, 'query'), adminController.getAnalyticsOverview);
+
+/**
+ * @route   GET /api/admin/analytics/popular-searches
+ * @desc    Get popular search queries
+ * @access  Admin
+ */
+router.get('/analytics/popular-searches', validate(getPopularSearchesQuerySchema, 'query'), adminController.getPopularSearches);
+
+/**
+ * @route   GET /api/admin/analytics/categories
+ * @desc    Get category statistics
+ * @access  Admin
+ */
+router.get('/analytics/categories', adminController.getCategoryStats);
+
+// ==========================================
+// FRAUD LOGS
+// ==========================================
+
+/**
+ * @route   GET /api/admin/fraud-logs
+ * @desc    Get fraud detection logs
+ * @access  Admin
+ */
+router.get('/fraud-logs', validate(getFraudLogsQuerySchema, 'query'), adminController.getFraudLogs);
+
+/**
+ * @route   PATCH /api/admin/fraud-logs/:id/review
+ * @desc    Mark fraud log as reviewed
+ * @access  Admin
+ */
+router.patch('/fraud-logs/:id/review', adminController.reviewFraudLog);
+
+// ==========================================
+// ROLES
+// ==========================================
+
+/**
+ * @route   GET /api/admin/roles
+ * @desc    Get all roles
+ * @access  Admin
+ */
+router.get('/roles', adminController.getRoles);
+
+// ==========================================
+// CATEGORIES
+// ==========================================
+
+/**
+ * @route   POST /api/admin/categories
+ * @desc    Create new category
+ * @access  Admin
+ */
+router.post('/categories', validate(createCategorySchema), adminController.createCategory);
+
+/**
+ * @route   PUT /api/admin/categories/:id
+ * @desc    Update category
+ * @access  Admin
+ */
+router.put('/categories/:id', validate(updateCategorySchema), adminController.updateCategory);
+
+/**
+ * @route   POST /api/admin/categories/:id/image
+ * @desc    Upload category image
+ * @access  Admin
+ * @note    Handled by upload module
+ */
+// This route will be in the upload module
+
+// ==========================================
+// SYSTEM CONFIG
+// ==========================================
+
+/**
+ * @route   GET /api/admin/config
+ * @desc    Get system configuration
+ * @access  Admin
+ */
+router.get('/config', adminController.getSystemConfig);
+
+/**
+ * @route   PUT /api/admin/config
+ * @desc    Update system configuration
+ * @access  Admin
+ */
+router.put('/config', validate(updateSystemConfigSchema), adminController.updateSystemConfig);
 
 module.exports = router;

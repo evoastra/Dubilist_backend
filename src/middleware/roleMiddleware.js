@@ -72,6 +72,7 @@ const requireMinRole = (minRole) => {
   };
 };
 const requireAdminOrModerator = requireRole('admin', 'moderator');
+
 // Check if user has specific permission
 const requirePermission = (...requiredPermissions) => {
   return (req, res, next) => {
@@ -111,6 +112,7 @@ const requireModerator = requireRole('admin', 'moderator');
 
 // Check if user is admin only
 const requireAdmin = requireRole('admin');
+
 
 // Check if user can post listings
 const requireCanPost = (req, res, next) => {
@@ -191,6 +193,7 @@ module.exports = {
   requireAdmin,
   requireCanPost,
   requireOwnership,
+  requireAdmin,  
   requireAdminOrModerator, 
   requireOwnerOrModerator,
   ROLE_HIERARCHY,

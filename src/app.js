@@ -90,7 +90,8 @@
   // MIDDLEWARE
   // ===========================================
 
-
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
   app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
 
@@ -403,47 +404,7 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
     }
   });
 
-  // Upload category image
-  app.post('/api/admin/categories/:id/image', authenticateToken, requireAdmin, upload.single('image'), async (req, res) => {
-    try {
-      const categoryId = parseInt(req.params.id);
-      if (!req.file) {
-        return res.status(400).json({ success: false, error: { message: 'No image file provided' } });
-      }
 
-      const category = await prisma.category.findUnique({ where: { id: categoryId } });
-      if (!category) {
-        return res.status(404).json({ success: false, error: { message: 'Category not found' } });
-      }
-
-      // Delete old image if exists
-      if (category.s3Key) {
-        try {
-          await s3Client.send(new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: category.s3Key }));
-        } catch (e) { console.error('Failed to delete old category image:', e); }
-      }
-
-      const s3Key = generateS3Key('categories', req.file.originalname, req.user.id);
-      await s3Client.send(new PutObjectCommand({
-        Bucket: S3_BUCKET,
-        Key: s3Key,
-        Body: req.file.buffer,
-        ContentType: req.file.mimetype,
-      }));
-
-      const imageUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
-
-      const updated = await prisma.category.update({
-        where: { id: categoryId },
-        data: { imageUrl, s3Key }
-      });
-
-      res.json({ success: true, message: 'Category image updated', data: updated });
-    } catch (error) {
-      console.error('Upload category image error:', error);
-      res.status(500).json({ success: false, error: { message: 'Failed to upload image' } });
-    }
-  });
 
 
   // ============================================================
@@ -520,14 +481,16 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
   // Login
   app.post('/api/auth/login', async (req, res) => {
     try {
-      const { email, password } = req.body;
+   const { email, password } = req.body;
 
-      if (!email || !password) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Email and password are required' } 
-        });
-      }
+// ✅ ADD THIS CHECK
+if (!email || !password) {
+  return res.status(400).json({
+    success: false,
+    message: "Email and password are required"
+  });
+}
+
 
       const user = await prisma.user.findUnique({
         where: { email },
@@ -2952,788 +2915,73 @@ app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
   // ===========================================
 
   // Admin login
-  app.post('/api/admin/login', async (req, res) => {
-    try {
-      const { email, password } = req.body;
 
-      const user = await prisma.user.findUnique({
-        where: { email },
-        include: { role: true }
-      });
-
-      if (!user || !user.passwordHash || user.role.name !== 'admin') {
-        return res.status(401).json({ 
-          success: false, 
-          error: { message: 'Invalid admin credentials' } 
-        });
-      }
-
-      const validPassword = await bcrypt.compare(password, user.passwordHash);
-      if (!validPassword) {
-        return res.status(401).json({ 
-          success: false, 
-          error: { message: 'Invalid admin credentials' } 
-        });
-      }
-
-      const tokens = generateTokens(user.id);
-
-      res.json({
-        success: true,
-        message: 'Admin login successful',
-        data: {
-          user: {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role.name
-          },
-          tokens
-        }
-      });
-    } catch (error) {
-      console.error('Admin login error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Login failed' } 
-      });
-    }
-  });
 
   // Dashboard stats (admin)
-  app.get('/api/admin/dashboard', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const [
-        totalUsers,
-        totalListings,
-        pendingListings,
-        activeListings,
-        todayUsers,
-        todayListings,
-        totalReports,
-        pendingReports
-      ] = await Promise.all([
-        prisma.user.count({ where: { isDeleted: false } }),
-        prisma.listing.count({ where: { isDeleted: false } }),
-        prisma.listing.count({ where: { status: 'pending' } }),
-        prisma.listing.count({ where: { status: 'approved', isDeleted: false } }),
-        prisma.user.count({ where: { createdAt: { gte: today } } }),
-        prisma.listing.count({ where: { createdAt: { gte: today } } }),
-        prisma.reportedListing.count(),
-        prisma.reportedListing.count({ where: { status: 'pending' } })
-      ]);
-
-      res.json({
-        success: true,
-        data: {
-          totalUsers,
-          totalListings,
-          pendingListings,
-          activeListings,
-          todayUsers,
-          todayListings,
-          totalReports,
-          pendingReports
-        }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get stats' } 
-      });
-    }
-  });
-
+ 
   // Get all users (admin)
-  app.get('/api/admin/users', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { page = 1, limit = 20, role, isBlocked, search } = req.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      const where = {
-        isDeleted: false,
-        ...(role && { role: { name: role } }),
-        ...(isBlocked !== undefined && { isBlocked: isBlocked === 'true' }),
-        ...(search && {
-          OR: [
-            { name: { contains: search } },
-            { email: { contains: search } }
-          ]
-        })
-      };
-
-      const [users, total] = await Promise.all([
-        prisma.user.findMany({
-          where,
-          include: { role: true },
-          skip,
-          take: parseInt(limit),
-          orderBy: { createdAt: 'desc' }
-        }),
-        prisma.user.count({ where })
-      ]);
-
-      res.json({
-        success: true,
-        data: users.map(u => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          phone: u.phone,
-          role: u.role.name,
-          isVerified: u.isVerified,
-          isBlocked: u.isBlocked,
-          createdAt: u.createdAt,
-          lastLoginAt: u.lastLoginAt
-        })),
-        pagination: { page: parseInt(page), limit: parseInt(limit), total }
-      });
-    } catch (error) {
-      console.error('Get users error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get users' } 
-      });
-    }
-  });
 
   // Get single user (admin)
-  app.get('/api/admin/users/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const user = await prisma.user.findUnique({
-        where: { id: parseInt(req.params.id) },
-        include: { 
-          role: true,
-          listings: { 
-            take: 10, 
-            orderBy: { createdAt: 'desc' },
-            include: { category: true }
-          },
-          _count: {
-            select: { 
-              listings: true, 
-              favorites: true,
-              reportsAgainstMe: true
-            }
-          }
-        }
-      });
-
-      if (!user) {
-        return res.status(404).json({ 
-          success: false, 
-          error: { message: 'User not found' } 
-        });
-      }
-
-      res.json({ success: true, data: user });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get user' } 
-      });
-    }
-  });
+ 
 
   // Block/unblock user (admin)
-  app.patch('/api/admin/users/:id/block', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { isBlocked } = req.body;
-      
-      const user = await prisma.user.update({
-        where: { id: parseInt(req.params.id) },
-        data: { isBlocked }
-      });
 
-      res.json({
-        success: true,
-        message: isBlocked ? 'User blocked' : 'User unblocked',
-        data: { id: user.id, isBlocked: user.isBlocked }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update user' } 
-      });
-    }
-  });
 
   // Update user role (admin)
-  app.patch('/api/admin/users/:id/role', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { roleName } = req.body;
-      
-      const role = await prisma.role.findUnique({ where: { name: roleName } });
-      if (!role) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Invalid role' } 
-        });
-      }
-
-      const user = await prisma.user.update({
-        where: { id: parseInt(req.params.id) },
-        data: { roleId: role.id },
-        include: { role: true }
-      });
-
-      res.json({
-        success: true,
-        message: 'User role updated',
-        data: { id: user.id, role: user.role.name }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update user role' } 
-      });
-    }
-  });
 
   // Get all listings (admin)
-  app.get('/api/admin/listings', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { page = 1, limit = 20, status, search } = req.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
 
-      const where = {
-        ...(status && { status }),
-        ...(search && {
-          OR: [
-            { title: { contains: search } },
-            { description: { contains: search } }
-          ]
-        })
-      };
 
-      const [listings, total] = await Promise.all([
-        prisma.listing.findMany({
-          where,
-          include: {
-            user: { select: { id: true, name: true, email: true } },
-            category: { select: { id: true, name: true } },
-            images: { take: 1 }
-          },
-          skip,
-          take: parseInt(limit),
-          orderBy: { createdAt: 'desc' }
-        }),
-        prisma.listing.count({ where })
-      ]);
 
-      res.json({
-        success: true,
-        data: listings,
-        pagination: { page: parseInt(page), limit: parseInt(limit), total }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get listings' } 
-      });
-    }
-  });
-
-  // Approve/reject listing (admin)
-  app.patch('/api/admin/listings/:id/status', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { status, reasonRejected } = req.body;
-      
-      if (!['approved', 'rejected', 'pending'].includes(status)) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Invalid status' } 
-        });
-      }
-
-      const listing = await prisma.listing.update({
-        where: { id: parseInt(req.params.id) },
-        data: { 
-          status,
-          reasonRejected: status === 'rejected' ? reasonRejected : null,
-          publishedAt: status === 'approved' ? new Date() : undefined
-        },
-        include: { user: true }
-      });
-
-      // Create notification for user
-      const notificationType = status === 'approved' ? 'listing_approved' : 'listing_rejected';
-      await prisma.notification.create({
-        data: {
-          userId: listing.userId,
-          type: notificationType,
-          title: status === 'approved' ? 'Listing Approved' : 'Listing Rejected',
-          message: status === 'approved' 
-            ? `Your listing "${listing.title}" has been approved and is now live.`
-            : `Your listing "${listing.title}" has been rejected. Reason: ${reasonRejected || 'Not specified'}`,
-          data: { listingId: listing.id }
-        }
-      }).catch(() => {});
-
-      res.json({
-        success: true,
-        message: `Listing ${status}`,
-        data: listing
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update listing' } 
-      });
-    }
-  });
 
   // Get reports (admin)
-  app.get('/api/admin/reports', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { type = 'all', status = 'pending', page = 1, limit = 20 } = req.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-
-      let listingReports = [];
-      let userReports = [];
-
-      if (type === 'all' || type === 'listing') {
-        listingReports = await prisma.reportedListing.findMany({
-          where: status !== 'all' ? { status } : {},
-          include: {
-            listing: { select: { id: true, title: true } },
-            reporter: { select: { id: true, name: true, email: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: type === 'listing' ? skip : 0,
-          take: type === 'listing' ? parseInt(limit) : 10
-        });
-      }
-
-      if (type === 'all' || type === 'user') {
-        userReports = await prisma.reportedUser.findMany({
-          where: status !== 'all' ? { status } : {},
-          include: {
-            reportedUser: { select: { id: true, name: true, email: true } },
-            reporter: { select: { id: true, name: true, email: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip: type === 'user' ? skip : 0,
-          take: type === 'user' ? parseInt(limit) : 10
-        });
-      }
-
-      res.json({
-        success: true,
-        data: { listingReports, userReports }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get reports' } 
-      });
-    }
-  });
+ 
 
   // Handle report (admin)
-  app.patch('/api/admin/reports/:type/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { type, id } = req.params;
-      const { status } = req.body;
 
-      if (!['pending', 'reviewed', 'dismissed', 'actioned'].includes(status)) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Invalid status' } 
-        });
-      }
-
-      if (type === 'listing') {
-        await prisma.reportedListing.update({
-          where: { id: parseInt(id) },
-          data: { 
-            status,
-            reviewedBy: req.user.id,
-            reviewedAt: new Date()
-          }
-        });
-      } else if (type === 'user') {
-        await prisma.reportedUser.update({
-          where: { id: parseInt(id) },
-          data: { 
-            status,
-            reviewedBy: req.user.id,
-            reviewedAt: new Date()
-          }
-        });
-      }
-
-      res.json({ success: true, message: 'Report updated' });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update report' } 
-      });
-    }
-  });
 
   // Get support tickets (admin)
-  app.get('/api/admin/support/tickets', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { status, priority, page = 1, limit = 20 } = req.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-
-      const where = {
-        ...(status && { status }),
-        ...(priority && { priority })
-      };
-
-      const [tickets, total] = await Promise.all([
-        prisma.supportTicket.findMany({
-          where,
-          include: {
-            user: { select: { id: true, name: true, email: true } },
-            messages: { take: 1, orderBy: { createdAt: 'desc' } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: parseInt(limit)
-        }),
-        prisma.supportTicket.count({ where })
-      ]);
-
-      res.json({
-        success: true,
-        data: tickets,
-        pagination: { page: parseInt(page), limit: parseInt(limit), total }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get tickets' } 
-      });
-    }
-  });
+ 
 
   // Reply to ticket (admin)
-  app.post('/api/admin/support/tickets/:id/reply', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const ticketId = parseInt(req.params.id);
-      const { message, status } = req.body;
 
-      if (!message) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Message is required' } 
-        });
-      }
-
-      const reply = await prisma.supportTicketMessage.create({
-        data: {
-          ticketId,
-          senderId: req.user.id,
-          senderType: 'admin',
-          message
-        }
-      });
-
-      // Update ticket status if provided
-      if (status) {
-        await prisma.supportTicket.update({
-          where: { id: ticketId },
-          data: { status }
-        });
-      }
-
-      res.status(201).json({
-        success: true,
-        message: 'Reply sent',
-        data: reply
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to send reply' } 
-      });
-    }
-  });
 
   // ===========================================
   // ANALYTICS ROUTES (Admin)
   // ===========================================
 
-  app.get('/api/admin/analytics/overview', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { days = 30 } = req.query;
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - parseInt(days));
 
-      const [
-        newUsers,
-        newListings,
-        totalViews,
-        totalSearches
-      ] = await Promise.all([
-        prisma.user.count({ where: { createdAt: { gte: startDate } } }),
-        prisma.listing.count({ where: { createdAt: { gte: startDate } } }),
-        prisma.listing.aggregate({ _sum: { viewsCount: true } }),
-        prisma.searchLog.count({ where: { createdAt: { gte: startDate } } })
-      ]);
 
-      res.json({
-        success: true,
-        data: {
-          period: `${days} days`,
-          newUsers,
-          newListings,
-          totalViews: totalViews._sum.viewsCount || 0,
-          totalSearches
-        }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get analytics' } 
-      });
-    }
-  });
 
-  app.get('/api/admin/analytics/popular-searches', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { limit = 20 } = req.query;
-
-      const searches = await prisma.searchLog.groupBy({
-        by: ['query'],
-        _count: { query: true },
-        orderBy: { _count: { query: 'desc' } },
-        take: parseInt(limit),
-        where: { query: { not: '' } }
-      });
-
-      res.json({
-        success: true,
-        data: searches.map(s => ({
-          query: s.query,
-          count: s._count.query
-        }))
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get popular searches' } 
-      });
-    }
-  });
-
-  app.get('/api/admin/analytics/categories', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const categories = await prisma.category.findMany({
-        where: { parentId: null },
-        include: {
-          _count: {
-            select: { listings: { where: { isDeleted: false } } }
-          }
-        },
-        orderBy: { orderIndex: 'asc' }
-      });
-
-      res.json({
-        success: true,
-        data: categories.map(c => ({
-          id: c.id,
-          name: c.name,
-          listingCount: c._count.listings
-        }))
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get category stats' } 
-      });
-    }
-  });
+  
 
   // ===========================================
   // FRAUD LOGS (Admin)
   // ===========================================
 
-  app.get('/api/admin/fraud-logs', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { page = 1, limit = 20, isReviewed } = req.query;
-      const skip = (parseInt(page) - 1) * parseInt(limit);
+  
 
-      const where = {
-        ...(isReviewed !== undefined && { isReviewed: isReviewed === 'true' })
-      };
 
-      const [logs, total] = await Promise.all([
-        prisma.fraudLog.findMany({
-          where,
-          include: {
-            user: { select: { id: true, name: true, email: true } }
-          },
-          orderBy: { createdAt: 'desc' },
-          skip,
-          take: parseInt(limit)
-        }),
-        prisma.fraudLog.count({ where })
-      ]);
-
-      res.json({
-        success: true,
-        data: logs,
-        pagination: { page: parseInt(page), limit: parseInt(limit), total }
-      });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get fraud logs' } 
-      });
-    }
-  });
-
-  app.patch('/api/admin/fraud-logs/:id/review', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      await prisma.fraudLog.update({
-        where: { id: parseInt(req.params.id) },
-        data: { isReviewed: true }
-      });
-
-      res.json({ success: true, message: 'Fraud log marked as reviewed' });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update fraud log' } 
-      });
-    }
-  });
 
   // ===========================================
   // ROLES (Admin)
   // ===========================================
 
-  app.get('/api/admin/roles', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const roles = await prisma.role.findMany({
-        include: {
-          _count: { select: { users: true } }
-        }
-      });
 
-      res.json({ success: true, data: roles });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get roles' } 
-      });
-    }
-  });
 
   // ===========================================
   // CATEGORIES ADMIN
   // ===========================================
 
-  app.post('/api/admin/categories', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { name, slug, description, parentId, orderIndex = 0 } = req.body;
 
-      if (!name || !slug) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Name and slug are required' } 
-        });
-      }
-
-      const category = await prisma.category.create({
-        data: {
-          name,
-          slug,
-          description,
-          parentId: parentId ? parseInt(parentId) : null,
-          orderIndex
-        }
-      });
-
-      res.status(201).json({ success: true, data: category });
-    } catch (error) {
-      if (error.code === 'P2002') {
-        return res.status(409).json({ 
-          success: false, 
-          error: { message: 'Category slug already exists' } 
-        });
-      }
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to create category' } 
-      });
-    }
-  });
-
-  app.put('/api/admin/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const { name, slug, description, parentId, orderIndex, isActive } = req.body;
-
-      const category = await prisma.category.update({
-        where: { id: parseInt(req.params.id) },
-        data: {
-          ...(name && { name }),
-          ...(slug && { slug }),
-          ...(description !== undefined && { description }),
-          ...(parentId !== undefined && { parentId: parentId ? parseInt(parentId) : null }),
-          ...(orderIndex !== undefined && { orderIndex }),
-          ...(isActive !== undefined && { isActive })
-        }
-      });
-
-      res.json({ success: true, data: category });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update category' } 
-      });
-    }
-  });
 
   // ===========================================
   // SYSTEM CONFIG (Admin)
   // ===========================================
+app.use('/api/admin', require('./modules/admin/admin.routes'));
+app.use('/api/admin-notes', require('./modules/admin/admin-notes.routes'));
 
-  app.get('/api/admin/config', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const configs = await prisma.systemConfig.findMany();
-      
-      const configMap = {};
-      configs.forEach(c => {
-        configMap[c.key] = c.value;
-      });
-
-      res.json({ success: true, data: configMap });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get config' } 
-      });
-    }
-  });
-
-  app.put('/api/admin/config', authenticateToken, requireAdmin, async (req, res) => {
-    try {
-      const updates = req.body; // { key1: value1, key2: value2 }
-
-      for (const [key, value] of Object.entries(updates)) {
-        await prisma.systemConfig.upsert({
-          where: { key },
-          update: { value: String(value) },
-          create: { key, value: String(value) }
-        });
-      }
-
-      res.json({ success: true, message: 'Config updated' });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to update config' } 
-      });
-    }
-  });
   app.use('/api/designers', designersRoutes);
   app.use('/api/bookings', bookingsRoutes);
   app.use('/api', jobApplicationsRoutes);
