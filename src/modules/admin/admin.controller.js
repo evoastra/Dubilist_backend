@@ -564,7 +564,25 @@ class AdminController {
       });
     }
   }
+async deleteCategory(req, res) {
+  try {
+    const categoryId = parseInt(req.params.id);
 
+    const result = await adminService.deleteCategory(categoryId);
+
+    res.json({
+      success: true,
+      message: result.message
+    });
+  } catch (error) {
+    console.error('Delete category error:', error);
+    const statusCode = error.message === 'Category not found' ? 404 : 400;
+    res.status(statusCode).json({
+      success: false,
+      error: { message: error.message || 'Failed to delete category' }
+    });
+  }
+}
   async updateCategoryImage(req, res) {
     try {
       const categoryId = parseInt(req.params.id);

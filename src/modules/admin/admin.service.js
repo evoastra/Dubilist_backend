@@ -805,6 +805,44 @@ class AdminService {
 
     return updated;
   }
+  /**
+ * Delete category
+ */
+async deleteCategory(categoryId) {
+      const PROTECTED_IDS = [1, 2, 3, 4, 5, 6];
+  if (PROTECTED_IDS.includes(categoryId)) {
+    throw new Error('Cannot delete core categories (Motors, Jobs, Property, Classifieds, Electronics, Furniture)');
+  }
+  const category = await prisma.category.findUnique({ 
+    where: { id: categoryId },
+    include: {
+      children: true,
+      _count: { select: { listings: true } }
+    }
+  });
+
+  if (!category) {
+    throw new Error('Category not found');
+  }
+
+  // Check if category has listings
+  if (category._count.listings > 0) {
+    throw new Error('Cannot delete category with existing listings');
+  }
+
+  // Check if category has subcategories
+  if (category.children.length > 0) {
+    throw new Error('Cannot delete category with subcategories');
+  }
+
+  await prisma.category.delete({
+    where: { id: categoryId }
+  });
+
+  logger.info({ categoryId }, 'Category deleted');
+
+  return { message: 'Category deleted successfully' };
+}
 
   // ==========================================
   // SYSTEM CONFIG
