@@ -50,7 +50,6 @@ model User {
   favorites           Favorite[]
   fraudLogs           FraudLog[]
   listings            Listing[]
-  jobApplications    JobApplication[]
   notifications       Notification[]
   recentlyViewed      RecentlyViewed[]
   refreshTokens       RefreshToken[]
@@ -136,7 +135,6 @@ model Listing {
   isFeatured        Boolean            @default(false) @map("is_featured")
   admin_notes       admin_notes[]
   chatRooms         ChatRoom[]
-  jobApplications    JobApplication[]
   classifiedDetails ClassifiedListing?
   electronicDetails ElectronicListing?
   favorites         Favorite[]
@@ -179,6 +177,8 @@ model ListingImage {
 model MotorListing {
   id              Int      @id @default(autoincrement())
   listingId       Int      @unique @map("listing_id")
+  name            String?  @db.VarChar(100)
+  phone           String?  @db.VarChar(20)
   make            String   @db.VarChar(100)
   model           String   @db.VarChar(100)
   variant         String?  @db.VarChar(100)
@@ -205,6 +205,8 @@ model MotorListing {
   specs           Json?
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
+  price           Decimal? @db.Decimal(12, 2)
+  currency String? @default("AED") @db.VarChar(10)
   listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([make])
@@ -218,6 +220,10 @@ model MotorListing {
 model JobListing {
   id                     Int       @id @default(autoincrement())
   listingId              Int       @unique @map("listing_id")
+  name                   String?   @db.VarChar(100)
+  phone                  String?   @db.VarChar(20)
+  price                  Decimal?  @db.Decimal(12, 2)
+  currency               String?   @default("AED") @db.VarChar(10)
   jobTitle               String    @map("job_title") @db.VarChar(200)
   companyName            String    @map("company_name") @db.VarChar(200)
   companyLogoUrl         String?   @map("company_logo_url") @db.VarChar(500)
@@ -255,6 +261,10 @@ model JobListing {
 model PropertyListing {
   id              Int       @id @default(autoincrement())
   listingId       Int       @unique @map("listing_id")
+  name            String?   @db.VarChar(100)
+  phone           String?   @db.VarChar(20)
+  price           Decimal?  @db.Decimal(12, 2)
+  currency        String?   @default("AED") @db.VarChar(10)
   listingType     String    @map("listing_type") @db.VarChar(20)
   propertyType    String    @map("property_type") @db.VarChar(50)
   bedrooms        Int?
@@ -294,6 +304,10 @@ model PropertyListing {
 model ClassifiedListing {
   id             Int      @id @default(autoincrement())
   listingId      Int      @unique @map("listing_id")
+  name           String?  @db.VarChar(100)
+  phone          String?  @db.VarChar(20)
+  price          Decimal? @db.Decimal(12, 2)
+  currency       String?  @default("AED") @db.VarChar(10)
   subCategory    String   @map("sub_category") @db.VarChar(100)
   condition      String   @db.VarChar(50)
   brand          String?  @db.VarChar(100)
@@ -327,6 +341,10 @@ model ClassifiedListing {
 model ElectronicListing {
   id              Int       @id @default(autoincrement())
   listingId       Int       @unique @map("listing_id")
+  name            String?   @db.VarChar(100)
+  phone           String?   @db.VarChar(20)
+  price           Decimal?  @db.Decimal(12, 2)
+  currency        String?   @default("AED") @db.VarChar(10)
   subCategory     String    @map("sub_category") @db.VarChar(100)
   brand           String    @db.VarChar(100)
   model           String    @db.VarChar(100)
@@ -371,6 +389,10 @@ model ElectronicListing {
 model FurnitureListing {
   id                Int      @id @default(autoincrement())
   listingId         Int      @unique @map("listing_id")
+  name              String?  @db.VarChar(100)
+  phone             String?  @db.VarChar(20)
+  price             Decimal? @db.Decimal(12, 2)
+  currency          String?  @default("AED") @db.VarChar(10)
   subCategory       String   @map("sub_category") @db.VarChar(100)
   condition         String   @db.VarChar(50)
   style             String?  @db.VarChar(50)
@@ -692,9 +714,6 @@ model DesignerBooking {
   dateTime           DateTime        @map("date_time")
   duration           Int             @default(60)
   endTime            DateTime?       @map("end_time")
-   userName            String?   @map("user_name") @db.VarChar(100)
-  userAddress         String?   @map("user_address") @db.VarChar(500)
-  userPhone           String?   @map("user_phone") @db.VarChar(20)
   bookingType        String          @map("booking_type") @db.VarChar(50)
   status             BookingStatus   @default(pending)
   userNotes          String?         @map("user_notes") @db.Text
@@ -711,13 +730,16 @@ model DesignerBooking {
   isPaid             Boolean         @default(false) @map("is_paid")
   paidAt             DateTime?       @map("paid_at")
   confirmedAt        DateTime?       @map("confirmed_at")
-   projectType         String?   @map("project_type") @db.VarChar(100)
-  projectDescription  String?   @map("project_description") @db.Text
   completedAt        DateTime?       @map("completed_at")
   reminderSent       Boolean         @default(false) @map("reminder_sent")
   reminderSentAt     DateTime?       @map("reminder_sent_at")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
+  projectDescription String?         @map("project_description") @db.Text
+  projectType        String?         @map("project_type") @db.VarChar(100)
+  userAddress        String?         @map("user_address") @db.VarChar(500)
+  userName           String?         @map("user_name") @db.VarChar(100)
+  userPhone          String?         @map("user_phone") @db.VarChar(20)
   designer           Designer        @relation(fields: [designerId], references: [id], onDelete: Cascade)
   user               User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   review             DesignerReview?
@@ -730,95 +752,6 @@ model DesignerBooking {
   @@map("designer_bookings")
 }
 
-model JobApplication {
-  id                 Int                      @id @default(autoincrement())
-  
-  // Relations
-  jobListingId       Int                      @map("job_listing_id")
-  userId             Int                      @map("user_id")
-  
-  // Applicant Information
-  name               String                   @db.VarChar(100)
-  dob                DateTime?                @db.Date
-  email              String                   @db.VarChar(255)
-  mobileNo           String                   @map("mobile_no") @db.VarChar(20)
-  languages          Json?                    // Array of languages
-  nationality        String?                  @db.VarChar(100)
-  location           String?                  @db.VarChar(200)
-  visaStatus         JobApplicationVisaStatus? @map("visa_status")
-  
-  // Resume
-  resumeUrl          String?                  @map("resume_url") @db.VarChar(500)
-  resumeS3Key        String?                  @map("resume_s3_key") @db.VarChar(500)
-  
-  // Qualifications
-  qualification      String?                  @db.VarChar(255)
-  jobStatus          JobApplicationJobStatus  @map("job_status")
-  yearsOfExperience  Int?                     @map("years_of_experience")
-  
-  // Salary
-  salaryExpectation  Decimal?                 @map("salary_expectation") @db.Decimal(12, 2)
-  salaryCurrency     String                   @default("AED") @map("salary_currency") @db.VarChar(10)
-  
-  // Additional Info
-  coverLetter        String?                  @map("cover_letter") @db.Text
-  portfolioUrl       String?                  @map("portfolio_url") @db.VarChar(500)
-  linkedinUrl        String?                  @map("linkedin_url") @db.VarChar(500)
-  
-  // Application Status
-  status             JobApplicationStatus     @default(pending)
-  employerNotes      String?                  @map("employer_notes") @db.Text
-  reviewedAt         DateTime?                @map("reviewed_at")
-  reviewedBy         Int?                     @map("reviewed_by")
-  
-  // Timestamps
-  createdAt          DateTime                 @default(now()) @map("created_at")
-  updatedAt          DateTime                 @updatedAt @map("updated_at")
-  
-  // Relations
-  jobListing         Listing                  @relation(fields: [jobListingId], references: [id], onDelete: Cascade)
-  user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
-  @@unique([jobListingId, userId], name: "unique_user_job_application")
-  @@index([jobListingId])
-  @@index([userId])
-  @@index([status])
-  @@index([createdAt])
-  @@index([jobListingId, status], name: "idx_job_status")
-  @@map("job_applications")
-}
-
-// Enums
-
-enum JobApplicationVisaStatus {
-  not_applicable
-  business
-  residence
-  employment
-  spouse
-  student
-  tourist
-  visit
-  
-  @@map("job_application_visa_status")
-}
-
-enum JobApplicationJobStatus {
-  fresher
-  experienced
-  
-  @@map("job_application_job_status")
-}
-
-enum JobApplicationStatus {
-  pending
-  reviewing
-  shortlisted
-  rejected
-  accepted
-  
-  @@map("job_application_status")
-}
 model DesignerReview {
   id                    Int              @id @default(autoincrement())
   designerId            Int              @map("designer_id")

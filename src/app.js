@@ -1291,6 +1291,7 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
             userId: req.user.id,
             city,
             country,
+            currency: "AED",
             address,
             latitude: latitude ? parseFloat(latitude) : null,
             longitude: longitude ? parseFloat(longitude) : null,
@@ -1318,6 +1319,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               fuelType,
               bodyType,
               motorType,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               engineSize: engineSize ? parseInt(engineSize) : null,
               cylinders: cylinders ? parseInt(cylinders) : null,
               horsepower: horsepower ? parseInt(horsepower) : null,
@@ -1331,7 +1334,12 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               features: features ? (typeof features === 'string' ? JSON.parse(features) : features) : null,
               // NEW: Add images
               images: motorImages ? (typeof motorImages === 'string' ? JSON.parse(motorImages) : motorImages) : null,
-              imagesS3Keys: motorImagesS3Keys ? (typeof motorImagesS3Keys === 'string' ? JSON.parse(motorImagesS3Keys) : motorImagesS3Keys) : null
+              images_s3_keys: motorImagesS3Keys
+  ? (typeof motorImagesS3Keys === 'string'
+      ? JSON.parse(motorImagesS3Keys)
+      : motorImagesS3Keys)
+  : null
+
             }
           });
         }
@@ -1352,6 +1360,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               experienceMax: experienceMax ? parseInt(experienceMax) : null,
               experienceLevel,
               educationRequired,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               salaryMin: salaryMin ? parseFloat(salaryMin) : null,
               salaryMax: salaryMax ? parseFloat(salaryMax) : null,
               salaryPeriod,
@@ -1387,6 +1397,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               buildingName,
               furnishing,
               condition,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               parkingSpaces: parkingSpaces ? parseInt(parkingSpaces) : null,
               rentFrequency,
               securityDeposit: securityDeposit ? parseFloat(securityDeposit) : null,
@@ -1399,7 +1411,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               completionDate: completionDate ? new Date(completionDate) : null,
               // NEW: Add images
               images: propertyImages ? (typeof propertyImages === 'string' ? JSON.parse(propertyImages) : propertyImages) : null,
-              imagesS3Keys: propertyImagesS3Keys ? (typeof propertyImagesS3Keys === 'string' ? JSON.parse(propertyImagesS3Keys) : propertyImagesS3Keys) : null
+              images_s3_keys: propertyImagesS3Keys
+ ? (typeof propertyImagesS3Keys === 'string' ? JSON.parse(propertyImagesS3Keys) : propertyImagesS3Keys) : null
             }
           });
         }
@@ -1421,6 +1434,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               widthCm: widthCm ? parseFloat(widthCm) : null,
               heightCm: heightCm ? parseFloat(heightCm) : null,
               gender,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               ageGroup,
               quantity: quantity ? parseInt(quantity) : 1,
               isHandmade: isHandmade === true || isHandmade === 'true',
@@ -1429,7 +1444,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               features: features ? (typeof features === 'string' ? JSON.parse(features) : features) : null,
               // NEW: Add images
               images: classifiedImages ? (typeof classifiedImages === 'string' ? JSON.parse(classifiedImages) : classifiedImages) : null,
-              imagesS3Keys: classifiedImagesS3Keys ? (typeof classifiedImagesS3Keys === 'string' ? JSON.parse(classifiedImagesS3Keys) : classifiedImagesS3Keys) : null
+              images_s3_keys: classifiedImagesS3Keys
+ ? (typeof classifiedImagesS3Keys === 'string' ? JSON.parse(classifiedImagesS3Keys) : classifiedImagesS3Keys) : null
             }
           });
         }
@@ -1455,6 +1471,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               energyRating,
               wattage: wattage ? parseInt(wattage) : null,
               color,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               weight: weight ? parseFloat(weight) : null,
               lengthCm: lengthCm ? parseFloat(lengthCm) : null,
               widthCm: widthCm ? parseFloat(widthCm) : null,
@@ -1470,7 +1488,8 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               features: features ? (typeof features === 'string' ? JSON.parse(features) : features) : null,
               // NEW: Add images
               images: electronicImages ? (typeof electronicImages === 'string' ? JSON.parse(electronicImages) : electronicImages) : null,
-              imagesS3Keys: electronicImagesS3Keys ? (typeof electronicImagesS3Keys === 'string' ? JSON.parse(electronicImagesS3Keys) : electronicImagesS3Keys) : null
+              images_s3_keys: electronicImagesS3Keys
+ ? (typeof electronicImagesS3Keys === 'string' ? JSON.parse(electronicImagesS3Keys) : electronicImagesS3Keys) : null
             }
           });
         }
@@ -1501,11 +1520,14 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
               assemblyRequired: assemblyRequired === true || assemblyRequired === 'true',
               deliveryAvailable: deliveryAvailable === true || deliveryAvailable === 'true',
               brand,
+                  price: parseFloat(price), // ✅ ADD THIS
+    currency: req.body.currency || 'AED',
               setOf: setOf ? parseInt(setOf) : null,
               features: features ? (typeof features === 'string' ? JSON.parse(features) : features) : null,
               // NEW: Add images
               images: furnitureImages ? (typeof furnitureImages === 'string' ? JSON.parse(furnitureImages) : furnitureImages) : null,
-              imagesS3Keys: furnitureImagesS3Keys ? (typeof furnitureImagesS3Keys === 'string' ? JSON.parse(furnitureImagesS3Keys) : furnitureImagesS3Keys) : null
+              images_s3_keys: furnitureImagesS3Keys
+ ? (typeof furnitureImagesS3Keys === 'string' ? JSON.parse(furnitureImagesS3Keys) : furnitureImagesS3Keys) : null
             }
           });
         }
@@ -2524,36 +2546,136 @@ app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async
   // ===========================================
 
   // Get my chat rooms
-  app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
-    try {
-      const rooms = await prisma.chatRoom.findMany({
-        where: {
-          OR: [
-            { buyerId: req.user.id },
-            { sellerId: req.user.id }
-          ]
+// Get my chat rooms - ENHANCED VERSION
+app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
+  try {
+    const rooms = await prisma.chatRoom.findMany({
+      where: {
+        OR: [
+          { buyerId: req.user.id },
+          { sellerId: req.user.id }
+        ]
+      },
+      include: {
+        listing: { 
+          select: { 
+            id: true, 
+            title: true, 
+            price: true,
+            status: true,
+            images: { take: 1, orderBy: { orderIndex: 'asc' } } 
+          } 
         },
-        include: {
-          listing: { select: { id: true, title: true, images: { take: 1 } } },
-          buyer: { select: { id: true, name: true, avatarUrl: true } },
-          seller: { select: { id: true, name: true, avatarUrl: true } },
-          messages: {
-            take: 1,
-            orderBy: { createdAt: 'desc' }
+        buyer: { 
+          select: { 
+            id: true, 
+            name: true, 
+            avatarUrl: true,
+            isVerified: true 
+          } 
+        },
+        seller: { 
+          select: { 
+            id: true, 
+            name: true, 
+            avatarUrl: true,
+            isVerified: true 
+          } 
+        },
+        messages: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            content: true,
+            senderId: true,
+            isRead: true,
+            createdAt: true
           }
         },
-        orderBy: { updatedAt: 'desc' }
-      });
+        _count: {
+          select: {
+            messages: {
+              where: {
+                senderId: { not: req.user.id },
+                isRead: false
+              }
+            }
+          }
+        }
+      },
+      orderBy: { updatedAt: 'desc' }
+    });
 
-      res.json({ success: true, data: rooms });
-    } catch (error) {
-      console.error('Get rooms error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get chat rooms' } 
-      });
-    }
-  });
+    // ✅ ENHANCE: Add role information for each room
+    const enhancedRooms = rooms.map(room => {
+      const iAmBuyer = room.buyerId === req.user.id;
+      const iAmSeller = room.sellerId === req.user.id;
+      
+      // Determine the other party (the person I'm chatting with)
+      const otherParty = iAmBuyer ? room.seller : room.buyer;
+      
+      // Get last message info
+      const lastMessage = room.messages[0] || null;
+      const unreadCount = room._count.messages;
+      
+      return {
+        id: room.id,
+        listingId: room.listingId,
+        
+        // ✅ NEW: My role in this conversation
+        myRole: iAmBuyer ? 'buyer' : 'seller',
+        
+        // ✅ NEW: The person I'm chatting with
+        otherParty: {
+          id: otherParty.id,
+          name: otherParty.name,
+          avatarUrl: otherParty.avatarUrl,
+          isVerified: otherParty.isVerified,
+          role: iAmBuyer ? 'seller' : 'buyer'
+        },
+        
+        // Listing info
+        listing: room.listing,
+        
+        // Last message
+        lastMessage: lastMessage ? {
+          id: lastMessage.id,
+          content: lastMessage.content,
+          sentByMe: lastMessage.senderId === req.user.id,
+          isRead: lastMessage.isRead,
+          createdAt: lastMessage.createdAt
+        } : null,
+        
+        // Unread count
+        unreadCount: unreadCount,
+        
+        // Room status
+        isBlocked: room.isBlocked,
+        
+        // Timestamps
+        createdAt: room.createdAt,
+        updatedAt: room.updatedAt,
+        
+        // ✅ OPTIONAL: Include full buyer/seller info if needed
+        buyer: room.buyer,
+        seller: room.seller
+      };
+    });
+
+    res.json({ 
+      success: true, 
+      data: enhancedRooms,
+      total: enhancedRooms.length
+    });
+  } catch (error) {
+    console.error('Get rooms error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { message: 'Failed to get chat rooms' } 
+    });
+  }
+});
 
   // Create/get chat room
   app.post('/api/chat/rooms', authenticateToken, async (req, res) => {
