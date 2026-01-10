@@ -1492,6 +1492,9 @@ if (!email || !password) {
               images_s3_keys: furnitureImagesS3Keys
  ? (typeof furnitureImagesS3Keys === 'string' ? JSON.parse(furnitureImagesS3Keys) : furnitureImagesS3Keys) : null
             }
+
+
+            
           });
         }
 
