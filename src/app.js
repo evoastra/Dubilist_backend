@@ -117,15 +117,15 @@ app.use(cors({
   exposedHeaders: ['Content-Range', 'X-Content-Range'],
   maxAge: 86400 // 24 hours
 }));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-
-  // Request logging
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
-    next();
-  });
+// Request logging
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
+  next();
+});
 
   // ===========================================
   // AUTH MIDDLEWARE
