@@ -96,41 +96,41 @@ const listingsCache = new NodeCache({
   // ===========================================
 
 
-app.use(helmet({ 
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
-}));
+// app.use(helmet({ 
+//   crossOriginResourcePolicy: { policy: "cross-origin" },
+//   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+// }));
 
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN 
-      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:4200', 'http://localhost:3000'];
+// app.use(cors({
+//   origin: function (origin, callback) {
+//     const allowedOrigins = process.env.CORS_ORIGIN 
+//       ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+//       : ['http://localhost:4200', 'http://localhost:3000'];
     
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
+//     // Allow requests with no origin (like mobile apps or curl requests)
+//     if (!origin) return callback(null, true);
     
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 86400 // 24 hours
-}));
+//     if (allowedOrigins.indexOf(origin) !== -1) {
+//       callback(null, true);
+//     } else {
+//       callback(new Error('Not allowed by CORS'));
+//     }
+//   },
+//   credentials: true,
+//   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+//   allowedHeaders: ['Content-Type', 'Authorization'],
+//   exposedHeaders: ['Content-Range', 'X-Content-Range'],
+//   maxAge: 86400 // 24 hours
+// }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+// app.use(express.json({ limit: '10mb' }));
+// app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
-  next();
-});
+// // Request logging
+// app.use((req, res, next) => {
+//   console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
+//   next();
+// });
 
   // ===========================================
   // AUTH MIDDLEWARE
