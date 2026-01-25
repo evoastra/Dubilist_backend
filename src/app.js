@@ -741,29 +741,43 @@ if (!email || !password) {
   });
 
   // Get user's listings
-  app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
-    try {
-      const listings = await prisma.listing.findMany({
-        where: { 
-          userId: req.user.id,
-          isDeleted: false
+app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
+  try {
+    const listings = await prisma.listing.findMany({
+      where: {
+        userId: req.user.id,
+        isDeleted: false
+      },
+      include: {
+        category: {
+          select: { id: true, name: true, slug: true }
         },
-        include: {
-          category: true,
-          images: { take: 1, orderBy: { orderIndex: 'asc' } }
+        images: {
+          take: 1,
+          orderBy: { orderIndex: 'asc' }
         },
-        orderBy: { createdAt: 'desc' }
-      });
 
-      res.json({ success: true, data: listings });
-    } catch (error) {
-      console.error('Get user listings error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get listings' } 
-      });
-    }
-  });
+        // ✅ INCLUDE ALL DETAIL TABLES
+        jobDetails: true,
+        motorDetails: true,
+        propertyDetails: true,
+        electronicDetails: true,
+        furnitureDetails: true,
+        classifiedDetails: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: listings });
+  } catch (error) {
+    console.error('Get user listings error:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to get listings' }
+    });
+  }
+});
+
 
   // Get public user profile
   app.get('/api/users/:id', async (req, res) => {
@@ -981,20 +995,23 @@ app.get('/api/listings', async (req, res) => {
     }
 
     // Build where clause
-    const where = {
-      isDeleted: false,
-      status: 'approved',
-      ...(categoryId ? { categoryId } : {}),
-        ...(city ? { city: { contains: city } } : {}),
-      ...(minPrice !== undefined || maxPrice !== undefined
-        ? {
-            price: {
-              ...(minPrice !== undefined ? { gte: minPrice } : {}),
-              ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
-            },
-          }
-        : {}),
-    };
+  const where = {
+  isDeleted: false,
+  ...(categoryId ? { categoryId } : {}),
+  ...(city ? { city: { contains: city } } : {}),
+  ...(minPrice !== undefined || maxPrice !== undefined
+    ? {
+        price: {
+          ...(minPrice !== undefined ? { gte: minPrice } : {}),
+          ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+        },
+      }
+    : {}),
+  ...(req.user?.role?.name === 'admin'
+    ? {}
+    : { status: 'approved' }),
+};
+
 
     // Category-specific filters
     if (categoryId === CATEGORY.MOTORS) {
@@ -1662,11 +1679,14 @@ app.get('/api/listings', async (req, res) => {
         status
       } = req.body;
       // 🔁 If category changed, remove old category details
-  if (categoryId && parseInt(categoryId) !== listing.categoryId) {
-    await prisma.motorListing.deleteMany({ where: { listingId } });
-    await prisma.electronicListing.deleteMany({ where: { listingId } });
-    await prisma.furnitureListing.deleteMany({ where: { listingId } });
-  }
+ if (categoryId && parseInt(categoryId) !== listing.categoryId) {
+  await prisma.motorListing.deleteMany({ where: { listingId } });
+  await prisma.jobListing.deleteMany({ where: { listingId } });
+  await prisma.propertyListing.deleteMany({ where: { listingId } });
+  await prisma.classifiedListing.deleteMany({ where: { listingId } });
+  await prisma.electronicListing.deleteMany({ where: { listingId } });
+  await prisma.furnitureListing.deleteMany({ where: { listingId } });
+}
       const updated = await prisma.listing.update({
         where: { id: listingId },
         data: {
@@ -1752,7 +1772,7 @@ app.get('/api/listings', async (req, res) => {
     });
   }
 
-
+listingsCache.flushAll();
 
       res.json({
         success: true,
@@ -1766,7 +1786,7 @@ app.get('/api/listings', async (req, res) => {
         error: { message: 'Failed to update listing' } 
       });
     }
-      listingsCache.flushAll();
+     
   res.json({ 
     success: true, 
     message: 'Listings cache cleared' 
@@ -1805,7 +1825,7 @@ app.get('/api/listings', async (req, res) => {
           deletedAt: new Date()
         }
       });
-
+listingsCache.flushAll();
       res.json({ success: true, message: 'Listing deleted' });
     } catch (error) {
       console.error('Delete listing error:', error);
@@ -1814,7 +1834,7 @@ app.get('/api/listings', async (req, res) => {
         error: { message: 'Failed to delete listing' } 
       });
     }
-      listingsCache.flushAll();
+     
   res.json({ 
     success: true, 
     message: 'Listings cache cleared' 
@@ -1846,7 +1866,7 @@ app.get('/api/listings', async (req, res) => {
         where: { id: listingId },
         data: { status: 'sold' }
       });
-
+listingsCache.flushAll();
       res.json({ success: true, message: 'Listing marked as sold' });
     } catch (error) {
       res.status(500).json({ 
@@ -1854,7 +1874,7 @@ app.get('/api/listings', async (req, res) => {
         error: { message: 'Failed to update listing' } 
       });
     }
-      listingsCache.flushAll();
+      
   res.json({ 
     success: true, 
     message: 'Listings cache cleared' 
