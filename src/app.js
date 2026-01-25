@@ -17,7 +17,12 @@
   const designersRoutes = require('./modules/designers/designers.routes');
   const bookingsRoutes = require('./modules/bookings/bookings.routes');
  const jobApplicationsRoutes = require('./modules/jobApplications/jobApplications.routes');
-
+ const NodeCache = require('node-cache');
+const listingsCache = new NodeCache({ 
+  stdTTL: 300,      // 5 minutes cache
+  checkperiod: 60,  // Cleanup every minute
+  useClones: false  // Better performance
+});
   const app = express();
 
   // AWS S3 Configuration
@@ -901,117 +906,160 @@ if (!email || !password) {
   // ===========================================
 
   // Get all listings
-  app.get('/api/listings', async (req, res) => {
-    try {
-      const categoryId = toInt(req.query.categoryId);
-   // If pagination is disabled, set limit to very high number (999999)
-     const noPaginationCategories = [CATEGORY.FURNITURE, CATEGORY.CLASSIFIEDS];
+app.get('/api/listings', async (req, res) => {
+  try {
+    const categoryId = toInt(req.query.categoryId);
+    
+    // Pagination check
+    const noPaginationCategories = [CATEGORY.FURNITURE, CATEGORY.CLASSIFIEDS];
     const usePagination = !categoryId || !noPaginationCategories.includes(categoryId);
-const page = usePagination ? clamp(toInt(req.query.page) ?? 1, 1, 100000) : 1;
-const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 999999;
+    const page = usePagination ? clamp(toInt(req.query.page) ?? 1, 1, 100000) : 1;
+    const limit = usePagination 
+      ? clamp(toInt(req.query.limit) ?? 20, 1, 50) 
+      : 2000; // ✅ Safety limit instead of 999999
 
-      
-      const city = cleanStr(req.query.city, 60);
+    // Parse filters
+    const city = cleanStr(req.query.city, 60);
+    const minPrice = toFloat(req.query.minPrice);
+    const maxPrice = toFloat(req.query.maxPrice);
+    const condition = cleanStr(req.query.condition, 50);
+    const brand = cleanStr(req.query.brand, 60);
+    const make = cleanStr(req.query.make, 60);
+    const year = toInt(req.query.year);
 
-      const minPrice = toFloat(req.query.minPrice);
-      const maxPrice = toFloat(req.query.maxPrice);
+    // Sort validation
+    const sort = cleanStr(req.query.sort, 30) ?? 'newest';
+    const SORTS = new Set(['newest', 'oldest', 'price_low', 'price_high', 'popular']);
+    const safeSort = SORTS.has(sort) ? sort : 'newest';
 
-      const condition = cleanStr(req.query.condition, 50);
-      const brand = cleanStr(req.query.brand, 60);
-      const make = cleanStr(req.query.make, 60);
-      const year = toInt(req.query.year);
+    // ✅ CACHE KEY - Unique per request
+    const cacheKey = JSON.stringify({
+      categoryId,
+      city,
+      minPrice,
+      maxPrice,
+      condition,
+      brand,
+      make,
+      year,
+      sort: safeSort,
+      page: usePagination ? page : 'all',
+      limit: usePagination ? limit : 'all'
+    });
 
-      // ✅ allowlist sort (prevents weird values / mistakes)
-      const sort = cleanStr(req.query.sort, 30) ?? 'newest';
-      const SORTS = new Set(['newest', 'oldest', 'price_low', 'price_high', 'popular']);
-      const safeSort = SORTS.has(sort) ? sort : 'newest';
-
-      // ✅ base where
-      const where = {
-        isDeleted: false,
-        status: 'approved', // ✅ force public only
-        ...(categoryId ? { categoryId } : {}),
-        ...(city ? { city: { contains: city, mode: 'insensitive' } } : {}),
-        ...(minPrice !== undefined || maxPrice !== undefined
-          ? {
-              price: {
-                ...(minPrice !== undefined ? { gte: minPrice } : {}),
-                ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
-              },
-            }
-          : {}),
-      };
-
-      // ✅ category-specific filters (same logic, but using parsed int)
-      if (categoryId === CATEGORY.MOTORS) {
-        where.motorDetails = {
-          ...(condition ? { condition } : {}),
-          ...(make ? { make } : {}),
-          ...(year ? { year } : {}),
-        };
+    // ✅ CHECK CACHE FIRST (only for non-paginated or first page)
+    if (!usePagination || page === 1) {
+      const cached = listingsCache.get(cacheKey);
+      if (cached) {
+        console.log('✅ Cache HIT - Returning cached listings');
+        return res.json(cached);
       }
-
-      if (categoryId === CATEGORY.ELECTRONICS) {
-        where.electronicDetails = {
-          ...(condition ? { condition } : {}),
-          ...(brand ? { brand } : {}),
-        };
-      }
-
-      if (categoryId === CATEGORY.FURNITURE) {
-        where.furnitureDetails = {
-          ...(condition ? { condition } : {}),
-        };
-      }
-
-      // ✅ orderBy
-      const orderBy =
-        safeSort === 'price_low' ? { price: 'asc' } :
-        safeSort === 'price_high' ? { price: 'desc' } :
-        safeSort === 'oldest' ? { createdAt: 'asc' } :
-        safeSort === 'popular' ? { viewsCount: 'desc' } :
-        { createdAt: 'desc' };
-
-      const skip = (page - 1) * limit;
-
-      const [listings, total] = await Promise.all([
-        prisma.listing.findMany({
-          where,
-          include: {
-            user: { select: { id: true, name: true, avatarUrl: true } },
-            category: { select: { id: true, name: true, slug: true } },
-            images: { take: 1, orderBy: { orderIndex: 'asc' } },
-
-            // ✅ keep same response keys, but SELECT only needed fields (faster than true)
-            motorDetails: { select: { condition: true, make: true, year: true } },
-            electronicDetails: { select: { condition: true, brand: true } },
-            furnitureDetails: { select: { condition: true } },
-          },
-          orderBy,
-          skip,
-          take: limit,
-        }),
-        prisma.listing.count({ where }),
-      ]);
-
-      res.json({
-        success: true,
-        data: listings,
-        pagination: {
-          page,
-          limit,
-          total,
-          pages: Math.ceil(total / limit),
-        },
-      });
-    } catch (error) {
-      console.error('Get listings error:', error);
-      res.status(500).json({
-        success: false,
-        error: { message: 'Failed to get listings' },
-      });
+      console.log('❌ Cache MISS - Fetching from database');
     }
-  });
+
+    // Build where clause
+    const where = {
+      isDeleted: false,
+      status: 'approved',
+      ...(categoryId ? { categoryId } : {}),
+        ...(city ? { city: { contains: city } } : {}),
+      ...(minPrice !== undefined || maxPrice !== undefined
+        ? {
+            price: {
+              ...(minPrice !== undefined ? { gte: minPrice } : {}),
+              ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
+            },
+          }
+        : {}),
+    };
+
+    // Category-specific filters
+    if (categoryId === CATEGORY.MOTORS) {
+      where.motorDetails = {
+        ...(condition ? { condition } : {}),
+        ...(make ? { make } : {}),
+        ...(year ? { year } : {}),
+      };
+    }
+
+    if (categoryId === CATEGORY.ELECTRONICS) {
+      where.electronicDetails = {
+        ...(condition ? { condition } : {}),
+        ...(brand ? { brand } : {}),
+      };
+    }
+
+    if (categoryId === CATEGORY.FURNITURE) {
+      where.furnitureDetails = {
+        ...(condition ? { condition } : {}),
+      };
+    }
+
+    if (categoryId === CATEGORY.CLASSIFIEDS) {
+      where.classifiedDetails = {
+        ...(condition ? { condition } : {}),
+        ...(brand ? { brand } : {}),
+      };
+    }
+
+    // OrderBy
+    const orderBy =
+      safeSort === 'price_low' ? { price: 'asc' } :
+      safeSort === 'price_high' ? { price: 'desc' } :
+      safeSort === 'oldest' ? { createdAt: 'asc' } :
+      safeSort === 'popular' ? { viewsCount: 'desc' } :
+      { createdAt: 'desc' };
+
+    const skip = (page - 1) * limit;
+
+    // Fetch from database
+    const [listings, total] = await Promise.all([
+      prisma.listing.findMany({
+        where,
+        include: {
+          user: { select: { id: true, name: true, avatarUrl: true } },
+          category: { select: { id: true, name: true, slug: true } },
+          images: { take: 1, orderBy: { orderIndex: 'asc' } },
+          motorDetails: { select: { condition: true, make: true, year: true } },
+          electronicDetails: { select: { condition: true, brand: true } },
+          furnitureDetails: { select: { condition: true } },
+          classifiedDetails: { select: { condition: true, brand: true } },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      }),
+      prisma.listing.count({ where }),
+    ]);
+
+    // Build response
+    const response = {
+      success: true,
+      data: listings,
+      pagination: {
+        page,
+        limit,
+        total,
+        pages: Math.ceil(total / limit),
+      },
+    };
+
+    // ✅ CACHE THE RESPONSE (only for non-paginated or first page)
+    if (!usePagination || page === 1) {
+      listingsCache.set(cacheKey, response);
+      console.log('💾 Response cached');
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Get listings error:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to get listings' },
+    });
+  }
+});
+
 
 
 
@@ -1695,6 +1743,11 @@ const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 99999
         error: { message: 'Failed to update listing' } 
       });
     }
+      listingsCache.flushAll();
+  res.json({ 
+    success: true, 
+    message: 'Listings cache cleared' 
+  });
   });
 
   // Delete listing
@@ -1738,6 +1791,11 @@ const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 99999
         error: { message: 'Failed to delete listing' } 
       });
     }
+      listingsCache.flushAll();
+  res.json({ 
+    success: true, 
+    message: 'Listings cache cleared' 
+  });
   });
 
   // Mark listing as sold
@@ -1773,6 +1831,11 @@ const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 99999
         error: { message: 'Failed to update listing' } 
       });
     }
+      listingsCache.flushAll();
+  res.json({ 
+    success: true, 
+    message: 'Listings cache cleared' 
+  });
   });
 
   // ===========================================
