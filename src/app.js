@@ -130,7 +130,7 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
   next();
-// });
+ });
 
   // ===========================================
   // AUTH MIDDLEWARE
