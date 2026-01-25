@@ -17,8 +17,11 @@ const query = expressValidator.query;
 const VALID_SERVICES = [
   'Residential Design',
   'Commercial Design',
+  'Interior Design',
   'Office Design',
   'Retail Design',
+    'Space Planning',            // ✅ ADD
+  '3D Visualization',
   'Hospitality Design',
   'Consultation',
   'Space Planning',

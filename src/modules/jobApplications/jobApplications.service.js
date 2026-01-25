@@ -481,4 +481,4 @@ module.exports = {
   adminGetAllApplications,
   notifyJobPosterNewApplication,
   notifyApplicantStatusUpdate
-};
+};  

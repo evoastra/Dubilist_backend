@@ -91,10 +91,31 @@
   // ===========================================
 
 
-app.use(helmet({ crossOriginResourcePolicy: { policy: "cross-origin" } }));
+app.use(helmet({ 
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+}));
+
 app.use(cors({
-  origin: process.env.CORS_ORIGIN?.split(',') || ['http://localhost:4200'],
+  origin: function (origin, callback) {
+    const allowedOrigins = process.env.CORS_ORIGIN 
+      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+      : ['http://localhost:4200', 'http://localhost:3000'];
+    
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  exposedHeaders: ['Content-Range', 'X-Content-Range'],
+  maxAge: 86400 // 24 hours
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -882,8 +903,11 @@ if (!email || !password) {
   // Get all listings
   app.get('/api/listings', async (req, res) => {
     try {
-      const page = clamp(toInt(req.query.page) ?? 1, 1, 100000);
-      const limit = clamp(toInt(req.query.limit) ?? 20, 1, 50);
+   // If pagination is disabled, set limit to very high number (999999)
+     const noPaginationCategories = [CATEGORY.FURNITURE, CATEGORY.CLASSIFIEDS];
+    const usePagination = !categoryId || !noPaginationCategories.includes(categoryId);
+const page = usePagination ? clamp(toInt(req.query.page) ?? 1, 1, 100000) : 1;
+const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 999999;
 
       const categoryId = toInt(req.query.categoryId);
       const city = cleanStr(req.query.city, 60);
