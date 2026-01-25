@@ -903,13 +903,14 @@ if (!email || !password) {
   // Get all listings
   app.get('/api/listings', async (req, res) => {
     try {
+      const categoryId = toInt(req.query.categoryId);
    // If pagination is disabled, set limit to very high number (999999)
      const noPaginationCategories = [CATEGORY.FURNITURE, CATEGORY.CLASSIFIEDS];
     const usePagination = !categoryId || !noPaginationCategories.includes(categoryId);
 const page = usePagination ? clamp(toInt(req.query.page) ?? 1, 1, 100000) : 1;
 const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 999999;
 
-      const categoryId = toInt(req.query.categoryId);
+      
       const city = cleanStr(req.query.city, 60);
 
       const minPrice = toFloat(req.query.minPrice);
