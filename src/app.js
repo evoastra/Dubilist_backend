@@ -95,43 +95,66 @@ const listingsCache = new NodeCache({
   // MIDDLEWARE
   // ===========================================
 
+  app.use(helmet());
 
-app.use(helmet({ 
-  crossOriginResourcePolicy: { policy: "cross-origin" },
-  crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
-}));
+/* ------------------------------
+   BODY PARSERS
+------------------------------ */
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-app.use(cors({
-  origin: function (origin, callback) {
-    const allowedOrigins = process.env.CORS_ORIGIN 
-      ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
-      : ['http://localhost:4200', 'http://localhost:3000'];
-    
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-  exposedHeaders: ['Content-Range', 'X-Content-Range'],
-  maxAge: 86400 // 24 hours
-}));
-
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
-
-// Request logging
+/* ------------------------------
+   LOGGING
+------------------------------ */
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} | ${req.method} ${req.path}`);
+  console.log(`${new Date().toISOString()} | ${req.method} ${req.originalUrl}`);
   next();
- });
+});
+// const allowedOrigins = process.env.CORS_ORIGIN
+//   ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
+//   : [];
 
+// app.use(cors({
+//   origin: (origin, callback) => {
+//     // Allow Postman, curl, server-to-server
+//     if (!origin) return callback(null, true);
+
+//     if (allowedOrigins.includes(origin)) {
+//       return callback(null, origin); // ✅ IMPORTANT
+//     }
+
+//     console.error("CORS BLOCKED:", origin);
+//     return callback(new Error("Not allowed by CORS"));
+//   },
+//   credentials: true,
+//   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+//   allowedHeaders: ["Content-Type", "Authorization"],
+// }));
+
+// // Handle preflight
+// app.options("*", cors());
+
+// /* ----------------------------------
+//    HELMET (AFTER CORS)
+// ---------------------------------- */
+// app.use(helmet({
+//   crossOriginResourcePolicy: { policy: "cross-origin" },
+//   crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }
+// }));
+
+// /* ----------------------------------
+//    BODY PARSERS
+// ---------------------------------- */
+// app.use(express.json({ limit: "10mb" }));
+// app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// /* ----------------------------------
+//    REQUEST LOGGING
+// ---------------------------------- */
+// app.use((req, res, next) => {
+//   console.log(`${new Date().toISOString()} | ${req.method} ${req.originalUrl}`);
+//   next();
+// });
   // ===========================================
   // AUTH MIDDLEWARE
   // ===========================================
