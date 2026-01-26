@@ -951,9 +951,7 @@ app.get('/api/listings', async (req, res) => {
     const noPaginationCategories = [CATEGORY.FURNITURE, CATEGORY.CLASSIFIEDS];
     const usePagination = !categoryId || !noPaginationCategories.includes(categoryId);
     const page = usePagination ? clamp(toInt(req.query.page) ?? 1, 1, 100000) : 1;
-    const limit = usePagination 
-      ? clamp(toInt(req.query.limit) ?? 20, 1, 50) 
-      : 2000; // ✅ Safety limit instead of 999999
+    const limit = usePagination ? clamp(toInt(req.query.limit) ?? 20, 1, 50) : 2000;
 
     // Parse filters
     const city = cleanStr(req.query.city, 60);
@@ -969,49 +967,35 @@ app.get('/api/listings', async (req, res) => {
     const SORTS = new Set(['newest', 'oldest', 'price_low', 'price_high', 'popular']);
     const safeSort = SORTS.has(sort) ? sort : 'newest';
 
-    // ✅ CACHE KEY - Unique per request
+    // ✅ CACHE KEY
     const cacheKey = JSON.stringify({
-      categoryId,
-      city,
-      minPrice,
-      maxPrice,
-      condition,
-      brand,
-      make,
-      year,
-      sort: safeSort,
-      page: usePagination ? page : 'all',
-      limit: usePagination ? limit : 'all'
+      categoryId, city, minPrice, maxPrice, condition, brand, make, year,
+      sort: safeSort, page: usePagination ? page : 'all', limit: usePagination ? limit : 'all'
     });
 
-    // ✅ CHECK CACHE FIRST (only for non-paginated or first page)
+    // ✅ CHECK CACHE
     if (!usePagination || page === 1) {
       const cached = listingsCache.get(cacheKey);
       if (cached) {
-        console.log('✅ Cache HIT - Returning cached listings');
+        console.log('✅ Cache HIT');
         return res.json(cached);
       }
-      console.log('❌ Cache MISS - Fetching from database');
+      console.log('❌ Cache MISS');
     }
 
     // Build where clause
-  const where = {
-  isDeleted: false,
-  ...(categoryId ? { categoryId } : {}),
-  ...(city ? { city: { contains: city } } : {}),
-  ...(minPrice !== undefined || maxPrice !== undefined
-    ? {
+    const where = {
+      isDeleted: false,
+      ...(categoryId ? { categoryId } : {}),
+      ...(city ? { city: { contains: city } } : {}),
+      ...(minPrice !== undefined || maxPrice !== undefined ? {
         price: {
           ...(minPrice !== undefined ? { gte: minPrice } : {}),
           ...(maxPrice !== undefined ? { lte: maxPrice } : {}),
         },
-      }
-    : {}),
-  ...(req.user?.role?.name === 'admin'
-    ? {}
-    : { status: 'approved' }),
-};
-
+      } : {}),
+      ...(req.user?.role?.name === 'admin' ? {} : { status: 'approved' }),
+    };
 
     // Category-specific filters
     if (categoryId === CATEGORY.MOTORS) {
@@ -1021,20 +1005,17 @@ app.get('/api/listings', async (req, res) => {
         ...(year ? { year } : {}),
       };
     }
-
     if (categoryId === CATEGORY.ELECTRONICS) {
       where.electronicDetails = {
         ...(condition ? { condition } : {}),
         ...(brand ? { brand } : {}),
       };
     }
-
     if (categoryId === CATEGORY.FURNITURE) {
       where.furnitureDetails = {
         ...(condition ? { condition } : {}),
       };
     }
-
     if (categoryId === CATEGORY.CLASSIFIEDS) {
       where.classifiedDetails = {
         ...(condition ? { condition } : {}),
@@ -1043,12 +1024,11 @@ app.get('/api/listings', async (req, res) => {
     }
 
     // OrderBy
-    const orderBy =
-      safeSort === 'price_low' ? { price: 'asc' } :
-      safeSort === 'price_high' ? { price: 'desc' } :
-      safeSort === 'oldest' ? { createdAt: 'asc' } :
-      safeSort === 'popular' ? { viewsCount: 'desc' } :
-      { createdAt: 'desc' };
+    const orderBy = safeSort === 'price_low' ? { price: 'asc' }
+      : safeSort === 'price_high' ? { price: 'desc' }
+      : safeSort === 'oldest' ? { createdAt: 'asc' }
+      : safeSort === 'popular' ? { viewsCount: 'desc' }
+      : { createdAt: 'desc' };
 
     const skip = (page - 1) * limit;
 
@@ -1060,10 +1040,12 @@ app.get('/api/listings', async (req, res) => {
           user: { select: { id: true, name: true, avatarUrl: true } },
           category: { select: { id: true, name: true, slug: true } },
           images: { take: 1, orderBy: { orderIndex: 'asc' } },
-          motorDetails: { select: { condition: true, make: true, year: true } },
-          electronicDetails: { select: { condition: true, brand: true } },
-          furnitureDetails: { select: { condition: true } },
-          classifiedDetails: { select: { condition: true, brand: true } },
+          motorDetails: { select: { condition: true, make: true, year: true, images: true } },
+          electronicDetails: { select: { condition: true, brand: true, images: true } },
+          furnitureDetails: { select: { condition: true, images: true } },
+          classifiedDetails: { select: { condition: true, brand: true, images: true } },
+          jobDetails: { select: { jobTitle: true, companyName: true, companyLogoUrl: true } },
+          propertyDetails: { select: { listingType: true, bedrooms: true, images: true } },
         },
         orderBy,
         skip,
@@ -1072,10 +1054,74 @@ app.get('/api/listings', async (req, res) => {
       prisma.listing.count({ where }),
     ]);
 
-    // Build response
+    // ✅✅✅ MERGE IMAGES FROM BOTH SOURCES ✅✅✅
+    const enhancedListings = listings.map(listing => {
+      let mergedImages = [...listing.images]; // Start with ListingImage table
+      
+      // Add images from category detail tables (JSON field)
+      if (listing.motorDetails?.images && Array.isArray(listing.motorDetails.images)) {
+        mergedImages.push(...listing.motorDetails.images.map((url, idx) => ({
+          id: `motor-${idx}`,
+          imageUrl: url,
+          orderIndex: mergedImages.length + idx,
+          isPrimary: false
+        })));
+      }
+      
+      if (listing.jobDetails?.companyLogoUrl) {
+        mergedImages.push({
+          id: 'job-logo',
+          imageUrl: listing.jobDetails.companyLogoUrl,
+          orderIndex: 0,
+          isPrimary: true
+        });
+      }
+      
+      if (listing.propertyDetails?.images && Array.isArray(listing.propertyDetails.images)) {
+        mergedImages.push(...listing.propertyDetails.images.map((url, idx) => ({
+          id: `property-${idx}`,
+          imageUrl: url,
+          orderIndex: mergedImages.length + idx,
+          isPrimary: false
+        })));
+      }
+      
+      if (listing.classifiedDetails?.images && Array.isArray(listing.classifiedDetails.images)) {
+        mergedImages.push(...listing.classifiedDetails.images.map((url, idx) => ({
+          id: `classified-${idx}`,
+          imageUrl: url,
+          orderIndex: mergedImages.length + idx,
+          isPrimary: false
+        })));
+      }
+      
+      if (listing.electronicDetails?.images && Array.isArray(listing.electronicDetails.images)) {
+        mergedImages.push(...listing.electronicDetails.images.map((url, idx) => ({
+          id: `electronic-${idx}`,
+          imageUrl: url,
+          orderIndex: mergedImages.length + idx,
+          isPrimary: false
+        })));
+      }
+      
+      if (listing.furnitureDetails?.images && Array.isArray(listing.furnitureDetails.images)) {
+        mergedImages.push(...listing.furnitureDetails.images.map((url, idx) => ({
+          id: `furniture-${idx}`,
+          imageUrl: url,
+          orderIndex: mergedImages.length + idx,
+          isPrimary: false
+        })));
+      }
+
+      return {
+        ...listing,
+        images: mergedImages.slice(0, 1) // ✅ Return only first image for list view
+      };
+    });
+
     const response = {
       success: true,
-      data: listings,
+      data: enhancedListings,
       pagination: {
         page,
         limit,
@@ -1084,7 +1130,7 @@ app.get('/api/listings', async (req, res) => {
       },
     };
 
-    // ✅ CACHE THE RESPONSE (only for non-paginated or first page)
+    // ✅ CACHE THE RESPONSE
     if (!usePagination || page === 1) {
       listingsCache.set(cacheKey, response);
       console.log('💾 Response cached');
@@ -1105,63 +1151,137 @@ app.get('/api/listings', async (req, res) => {
 
 
   // Get single listing
-  app.get('/api/listings/:id', optionalAuth, async (req, res) => {
-    try {
-      const listing = await prisma.listing.findUnique({
-        where: { id: parseInt(req.params.id) },
-        include: {
-          user: { select: { id: true, name: true, avatarUrl: true, createdAt: true, isVerified: true } },
-          category: true,
-          images: { orderBy: { orderIndex: 'asc' } },
-          // Include all category details WITH IMAGES
-          motorDetails: true,
-          jobDetails: true,
-          propertyDetails: true,
-          classifiedDetails: true,
-          electronicDetails: true,
-          furnitureDetails: true
-        }
-      });
-
-      if (!listing || listing.isDeleted) {
-        return res.status(404).json({ 
-          success: false, 
-          error: { message: 'Listing not found' } 
-        });
+ app.get('/api/listings/:id', optionalAuth, async (req, res) => {
+  try {
+    const listing = await prisma.listing.findUnique({
+      where: { id: parseInt(req.params.id) },
+      include: {
+        user: { select: { id: true, name: true, avatarUrl: true, createdAt: true, isVerified: true } },
+        category: true,
+        images: { orderBy: { orderIndex: 'asc' } },
+        motorDetails: true,
+        jobDetails: true,
+        propertyDetails: true,
+        classifiedDetails: true,
+        electronicDetails: true,
+        furnitureDetails: true
       }
+    });
 
-      // Increment view count
-      await prisma.listing.update({
-        where: { id: listing.id },
-        data: { viewsCount: { increment: 1 } }
+    if (!listing || listing.isDeleted) {
+      return res.status(404).json({ 
+        success: false, 
+        error: { message: 'Listing not found' } 
       });
+    }
 
-      // Track recently viewed if user is logged in
-      if (req.user) {
-        await prisma.recentlyViewed.upsert({
-          where: {
-            userId_listingId: {
-              userId: req.user.id,
-              listingId: listing.id
-            }
-          },
-          update: { viewedAt: new Date() },
-          create: {
+    // ✅✅✅ MERGE IMAGES FROM BOTH SOURCES ✅✅✅
+    let allImages = [...listing.images];
+    
+    // Motors images
+    if (listing.motorDetails?.images && Array.isArray(listing.motorDetails.images)) {
+      allImages.push(...listing.motorDetails.images.map((url, idx) => ({
+        id: `motor-${idx}`,
+        imageUrl: url,
+        s3Key: listing.motorDetails.images_s3_keys?.[idx] || null,
+        orderIndex: allImages.length + idx,
+        isPrimary: false
+      })));
+    }
+    
+    // Job company logo
+    if (listing.jobDetails?.companyLogoUrl) {
+      allImages.push({
+        id: 'job-logo',
+        imageUrl: listing.jobDetails.companyLogoUrl,
+        s3Key: listing.jobDetails.companyLogoS3Key || null,
+        orderIndex: 0,
+        isPrimary: true
+      });
+    }
+    
+    // Property images
+    if (listing.propertyDetails?.images && Array.isArray(listing.propertyDetails.images)) {
+      allImages.push(...listing.propertyDetails.images.map((url, idx) => ({
+        id: `property-${idx}`,
+        imageUrl: url,
+        s3Key: listing.propertyDetails.images_s3_keys?.[idx] || null,
+        orderIndex: allImages.length + idx,
+        isPrimary: false
+      })));
+    }
+    
+    // Classified images
+    if (listing.classifiedDetails?.images && Array.isArray(listing.classifiedDetails.images)) {
+      allImages.push(...listing.classifiedDetails.images.map((url, idx) => ({
+        id: `classified-${idx}`,
+        imageUrl: url,
+        s3Key: listing.classifiedDetails.images_s3_keys?.[idx] || null,
+        orderIndex: allImages.length + idx,
+        isPrimary: false
+      })));
+    }
+    
+    // Electronic images
+    if (listing.electronicDetails?.images && Array.isArray(listing.electronicDetails.images)) {
+      allImages.push(...listing.electronicDetails.images.map((url, idx) => ({
+        id: `electronic-${idx}`,
+        imageUrl: url,
+        s3Key: listing.electronicDetails.images_s3_keys?.[idx] || null,
+        orderIndex: allImages.length + idx,
+        isPrimary: false
+      })));
+    }
+    
+    // Furniture images
+    if (listing.furnitureDetails?.images && Array.isArray(listing.furnitureDetails.images)) {
+      allImages.push(...listing.furnitureDetails.images.map((url, idx) => ({
+        id: `furniture-${idx}`,
+        imageUrl: url,
+        s3Key: listing.furnitureDetails.images_s3_keys?.[idx] || null,
+        orderIndex: allImages.length + idx,
+        isPrimary: false
+      })));
+    }
+
+    // Increment view count
+    await prisma.listing.update({
+      where: { id: listing.id },
+      data: { viewsCount: { increment: 1 } }
+    });
+
+    // Track recently viewed
+    if (req.user) {
+      await prisma.recentlyViewed.upsert({
+        where: {
+          userId_listingId: {
             userId: req.user.id,
             listingId: listing.id
           }
-        }).catch(() => {});
-      }
-
-      res.json({ success: true, data: listing });
-    } catch (error) {
-      console.error('Get listing error:', error);
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to get listing' } 
-      });
+        },
+        update: { viewedAt: new Date() },
+        create: {
+          userId: req.user.id,
+          listingId: listing.id
+        }
+      }).catch(() => {});
     }
-  });
+
+    res.json({ 
+      success: true, 
+      data: {
+        ...listing,
+        images: allImages // ✅ Return ALL merged images
+      }
+    });
+  } catch (error) {
+    console.error('Get listing error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: { message: 'Failed to get listing' } 
+    });
+  }
+});
 
   // Create listing
 
