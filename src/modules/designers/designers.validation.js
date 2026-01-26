@@ -19,7 +19,9 @@ const VALID_SERVICES = [
   'Commercial Design',
   'Interior Design',
   'Office Design',
+   'Living Room Design',
   'Retail Design',
+   'Bedroom Design',
     'Space Planning',            // ✅ ADD
   '3D Visualization',
   'Hospitality Design',
