@@ -174,6 +174,7 @@ const createApplication = async (data) => {
       resumeUrl: data.resumeUrl,
       resumeS3Key: data.resumeS3Key,
       qualification: data.qualification,
+       languages: parsedLanguages,
       jobStatus: data.jobStatus,
       yearsOfExperience: data.yearsOfExperience ? parseInt(data.yearsOfExperience) : null,
       salaryExpectation: data.salaryExpectation ? parseFloat(data.salaryExpectation) : null,

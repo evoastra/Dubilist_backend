@@ -30,6 +30,8 @@ model User {
   isBlocked           Boolean                @default(false) @map("is_blocked")
   avatarUrl           String?                @map("avatar_url") @db.VarChar(500)
   bio                 String?                @db.Text
+  jobApplications           JobApplication[]  @relation("UserApplications")
+  reviewedJobApplications   JobApplication[]  @relation("ReviewedApplications")
   lastLoginAt         DateTime?              @map("last_login_at")
   lastListingPostedAt DateTime?              @map("last_listing_posted_at")
   lastChatMessageAt   DateTime?              @map("last_chat_message_at")
@@ -68,6 +70,69 @@ model User {
   @@map("users")
 }
 
+model JobApplication {
+  id                Int       @id @default(autoincrement())
+  jobListingId      Int       @map("job_listing_id")
+  userId            Int       @map("user_id")
+  
+  // Applicant details
+  name              String    @db.VarChar(100)
+  dob               DateTime? @map("dob")
+  email             String    @db.VarChar(255)
+  mobileNo          String    @map("mobile_no") @db.VarChar(20)
+  languages         Json?
+  nationality       String?   @db.VarChar(100)
+  location          String?   @db.VarChar(200)
+  visaStatus        String?   @map("visa_status") @db.VarChar(100)
+  
+  // Resume
+  resumeUrl         String    @map("resume_url") @db.VarChar(500)
+  resumeS3Key       String?   @map("resume_s3_key") @db.VarChar(500)
+  
+  // Qualifications
+  qualification     String?   @db.VarChar(255)
+  jobStatus         String    @map("job_status") @db.VarChar(50) // fresher/experienced
+  yearsOfExperience Int?      @map("years_of_experience")
+  
+  // Salary
+  salaryExpectation Float?    @map("salary_expectation")
+  salaryCurrency    String    @default("AED") @map("salary_currency") @db.VarChar(10)
+  
+  // Additional
+  coverLetter       String?   @map("cover_letter") @db.Text
+  portfolioUrl      String?   @map("portfolio_url") @db.VarChar(500)
+  linkedinUrl       String?   @map("linkedin_url") @db.VarChar(500)
+  
+  // Status
+  status            JobApplicationStatus @default(pending)
+  employerNotes     String?   @map("employer_notes") @db.Text
+  reviewedAt        DateTime? @map("reviewed_at")
+  reviewedBy        Int?      @map("reviewed_by")
+  
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  
+  // Relations
+  user              User      @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
+  jobListing        Listing   @relation("JobApplications", fields: [jobListingId], references: [id], onDelete: Cascade)
+  reviewer          User?     @relation("ReviewedApplications", fields: [reviewedBy], references: [id])
+  
+  @@index([jobListingId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("job_applications")
+}
+
+enum JobApplicationStatus {
+  pending
+  reviewing
+  shortlisted
+  rejected
+  accepted
+  
+  @@map("job_application_status")
+}
 model RefreshToken {
   id        Int       @id @default(autoincrement())
   userId    Int       @map("user_id")
@@ -110,6 +175,7 @@ model Listing {
   title             String             @db.VarChar(255)
   description       String             @db.Text
   price             Decimal            @db.Decimal(12, 2)
+   jobApplications   JobApplication[]  @relation("JobApplications")
   currency          String             @default("AED") @db.VarChar(10)
   categoryId        Int                @map("category_id")
   city              String?            @db.VarChar(100)

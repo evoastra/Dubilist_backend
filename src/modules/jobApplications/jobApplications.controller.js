@@ -50,7 +50,7 @@ const applyToJob = async (req, res) => {
     if (existingApplication) {
       return sendError(res, 'You have already applied to this job', 409);
     }
-
+ console.log('Creating application with data:', JSON.stringify(applicationData, null, 2));
     const applicationData = {
       jobListingId: listingId,
       userId: req.user.id,
@@ -116,6 +116,9 @@ const applyToJob = async (req, res) => {
     return sendSuccess(res, application, 'Application submitted successfully', 201);
   } catch (error) {
     console.error('Apply to job error:', error);
+     console.error('Apply to job error:', error);
+    console.error('Error stack:', error.stack);
+    console.error('Error details:', JSON.stringify(error, null, 2));
     return sendError(res, 'Failed to submit application', 500);
   }
 };
