@@ -37,18 +37,33 @@ const listingsCache = new NodeCache({
   const S3_BUCKET = process.env.AWS_S3_BUCKET || 'dubilist-images';
 
   // Multer for file upload (memory storage)
-  const upload = multer({
-    storage: multer.memoryStorage(),
-    limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
-    fileFilter: (req, file, cb) => {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (allowedTypes.includes(file.mimetype)) {
-        cb(null, true);
-      } else {
-        cb(new Error('Invalid file type. Only JPEG, PNG, WebP, GIF allowed.'));
-      }
-    },
-  });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB max
+  fileFilter: (req, file, cb) => {
+    // ✅ IMPROVED: More flexible image type checking
+    const allowedTypes = [
+      'image/jpeg',
+      'image/jpg',
+      'image/png',
+      'image/webp',
+      'image/gif',
+      'application/octet-stream' // Sometimes browsers send this for images
+    ];
+    
+    // Also check file extension
+    const allowedExtensions = /\.(jpg|jpeg|png|webp|gif)$/i;
+    
+    const isValidMimeType = allowedTypes.includes(file.mimetype);
+    const isValidExtension = allowedExtensions.test(file.originalname.toLowerCase());
+    
+    if (isValidMimeType || isValidExtension) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Only JPEG, PNG, WebP, GIF allowed.`));
+    }
+  },
+});
 
   // Generate unique filename for S3
   const generateS3Key = (folder, originalName, userId) => {
