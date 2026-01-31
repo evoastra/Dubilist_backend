@@ -2134,7 +2134,114 @@ listingsCache.flushAll();
       });
     }
   });
+app.post('/api/listings/:id/apply', authenticateToken, async (req, res) => {
+  try {
+    const listingId = parseInt(req.params.id);
+    
+    // Check if listing exists and is a job
+    const listing = await prisma.listing.findUnique({
+      where: { id: listingId },
+      include: { 
+        jobDetails: true,
+        category: true 
+      }
+    });
 
+    if (!listing || listing.isDeleted) {
+      return res.status(404).json({
+        success: false,
+        error: { message: 'Job listing not found' }
+      });
+    }
+
+    if (listing.categoryId !== 2) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'This is not a job listing' }
+      });
+    }
+
+    if (listing.status !== 'approved') {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'This job is not active' }
+      });
+    }
+
+    // Can't apply to your own job
+    if (listing.userId === req.user.id) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Cannot apply to your own job listing' }
+      });
+    }
+
+    // Validate required fields
+    const {
+      resumeUrl,
+      resumeS3Key,
+      qualification,
+      jobStatus
+    } = req.body;
+
+    if (!resumeUrl) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Resume is required. Please upload your resume first.' }
+      });
+    }
+
+    if (!jobStatus) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Job status (experienced/fresher) is required' }
+      });
+    }
+
+    // Create application using JobApplication table
+    const application = await prisma.jobApplication.create({
+      data: {
+        listingId: listingId,
+        userId: req.user.id,
+        name: req.user.name,
+        email: req.user.email,
+        mobileNo: req.user.phone || req.body.mobileNo,
+        resumeUrl,
+        resumeS3Key,
+        qualification,
+        jobStatus,
+        status: 'pending'
+      }
+    });
+
+    // Notify job poster
+    await prisma.notification.create({
+      data: {
+        userId: listing.userId,
+        type: 'system',
+        title: 'New Job Application',
+        message: `${req.user.name} applied for ${listing.title}`,
+        data: {
+          applicationId: application.id,
+          listingId: listing.id
+        }
+      }
+    }).catch(() => {});
+
+    res.status(201).json({
+      success: true,
+      message: 'Application submitted successfully',
+      data: application
+    });
+
+  } catch (error) {
+    console.error('Job application error:', error);
+    res.status(500).json({
+      success: false,
+      error: { message: 'Failed to submit application', details: error.message }
+    });
+  }
+});
   // Add to favorites
   app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {
     try {
