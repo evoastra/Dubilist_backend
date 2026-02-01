@@ -50,7 +50,7 @@ const applyToJob = async (req, res) => {
     if (existingApplication) {
       return sendError(res, 'You have already applied to this job', 409);
     }
- console.log('Creating application with data:', JSON.stringify(applicationData, null, 2));
+
     const applicationData = {
       jobListingId: listingId,
       userId: req.user.id,

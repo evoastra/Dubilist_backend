@@ -75,6 +75,8 @@ model JobApplication {
   jobListingId      Int       @map("job_listing_id")
   userId            Int       @map("user_id")
   
+
+  
   // Applicant details
   name              String    @db.VarChar(100)
   dob               DateTime? @map("dob")
