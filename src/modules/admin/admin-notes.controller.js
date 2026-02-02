@@ -33,7 +33,8 @@ class AdminNotesController {
         listingId,
         req.user.id,
         content,
-        isInternal
+        isInternal,
+         imagesS3Keys || null
       );
 
       res.status(201).json({

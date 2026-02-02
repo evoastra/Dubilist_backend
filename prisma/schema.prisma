@@ -500,6 +500,7 @@ model Favorite {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   listingId Int      @map("listing_id")
+  images    Json?    // ✅ ADD THIS - Store favorite item images
   createdAt DateTime @default(now()) @map("created_at")
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -626,6 +627,8 @@ model SearchLog {
   userId       Int?     @map("user_id")
   query        String   @db.VarChar(500)
   filters      Json?
+  images       Json? 
+
   resultsCount Int      @default(0) @map("results_count")
   ipAddress    String?  @map("ip_address") @db.VarChar(50)
   createdAt    DateTime @default(now()) @map("created_at")
@@ -860,6 +863,8 @@ model admin_notes {
   listing_id  Int
   admin_id    Int
   content     String   @db.Text
+   images      Json?    // ✅ ADD THIS - Store admin note images
+  images_s3_keys Json? // ✅ ADD THIS - Store S3 keys for deletion
   is_internal Boolean  @default(true)
   created_at  DateTime @default(now())
   updated_at  DateTime
