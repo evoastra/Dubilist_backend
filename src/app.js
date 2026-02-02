@@ -2149,6 +2149,8 @@ listingsCache.flushAll();
       });
     }
   });
+
+  
 app.use('/api', jobApplicationsRoutes);
   // Add to favorites
  app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {

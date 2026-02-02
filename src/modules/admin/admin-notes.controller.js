@@ -24,6 +24,10 @@ class AdminNotesController {
     }
   }
 
+
+
+
+  
   async addNote(req, res) {
     try {
       const listingId = parseInt(req.params.listingId);

@@ -41,6 +41,9 @@ const applyToJob = async (req, res) => {
       return sendError(res, 'Cannot apply to your own job listing', 400);
     }
 
+
+
+    
     // Check if already applied
     const existingApplication = await jobApplicationsService.getUserApplicationForJob(
       req.user.id,

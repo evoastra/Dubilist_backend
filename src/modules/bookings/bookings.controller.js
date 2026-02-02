@@ -171,6 +171,8 @@ const updateBooking = async (req, res) => {
   userAddress: req.body.userAddress || req.body.user_address,
   userPhone: req.body.userPhone || req.body.user_phone,
   
+
+  
   // ✅ NEW FIELDS - Allow updating project details
   projectType: req.body.projectType || req.body.project_type,
   projectDescription: req.body.projectDescription || req.body.project_description,
