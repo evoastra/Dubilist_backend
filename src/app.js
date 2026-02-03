@@ -64,6 +64,17 @@ const upload = multer({
     }
   },
 });
+const uploadResume = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB max for resumes
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf' || file.originalname.toLowerCase().endsWith('.pdf')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only PDF files are allowed for resumes'));
+    }
+  },
+});
 
   // Generate unique filename for S3
   const generateS3Key = (folder, originalName, userId) => {
@@ -361,7 +372,7 @@ app.use((req, res, next) => {
   // ===========================================
 // UPLOAD RESUME (PDF ONLY)
 // ===========================================
-app.post('/api/upload/resume', authenticateToken, upload.single('resume'), async (req, res) => {
+app.post('/api/upload/resume', authenticateToken, uploadResume.single('resume'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ 
