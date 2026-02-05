@@ -373,6 +373,11 @@ app.use((req, res, next) => {
 // UPLOAD RESUME (PDF ONLY)
 // ===========================================
 app.post('/api/upload/resume', authenticateToken, uploadResume.single('resume'), async (req, res) => {
+      console.log('=== RESUME UPLOAD DEBUG ===');
+    console.log('req.file:', req.file);
+    console.log('req.body:', req.body);
+    console.log('Content-Type:', req.headers['content-type']);
+    console.log('===========================');
   try {
     if (!req.file) {
       return res.status(400).json({ 
@@ -672,39 +677,61 @@ if (!email || !password) {
   });
 
   // Change password
-  app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
-    try {
-      const { currentPassword, newPassword } = req.body;
+ app.post('/api/auth/change-password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
 
-      if (!currentPassword || !newPassword) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'Current and new password required' } 
-        });
-      }
-
-      const validPassword = await bcrypt.compare(currentPassword, req.user.passwordHash);
-      if (!validPassword) {
-        return res.status(401).json({ 
-          success: false, 
-          error: { message: 'Current password is incorrect' } 
-        });
-      }
-
-      const passwordHash = await bcrypt.hash(newPassword, 12);
-      await prisma.user.update({
-        where: { id: req.user.id },
-        data: { passwordHash }
-      });
-
-      res.json({ success: true, message: 'Password changed successfully' });
-    } catch (error) {
-      res.status(500).json({ 
-        success: false, 
-        error: { message: 'Failed to change password' } 
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: 'Current and new password required',
       });
     }
-  });
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+    });
+
+    const valid = await bcrypt.compare(
+      currentPassword,
+      user.passwordHash
+    );
+
+    if (!valid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Current password is incorrect',
+      });
+    }
+
+    if (!validatePassword(newPassword)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters, include uppercase, lowercase, and a number',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordHash },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+      data: null,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Failed to change password',
+    });
+  }
+});
+
 
   // ===========================================
   // USER ROUTES
@@ -765,6 +792,119 @@ if (!email || !password) {
       });
     }
   });
+const { validatePassword } = require('./utils/passwordValidator');
+
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Token and password are required',
+      });
+    }
+
+    if (!validatePassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters, include uppercase, lowercase, and a number',
+      });
+    }
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: token,
+        resetPasswordExpires: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully',
+      data: null,
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
+    });
+  }
+});
+
+const crypto = require('crypto');
+
+app.post('/api/auth/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is required',
+      });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Always return success (security best practice)
+    if (!user) {
+      return res.json({
+        success: true,
+        message: 'If the email exists, a reset link has been sent',
+        data: null,
+      });
+    }
+
+    const token = crypto.randomBytes(32).toString('hex');
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        resetPasswordToken: token,
+        resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
+      },
+    });
+
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
+
+    // 🔔 SEND EMAIL (plug SendGrid/Nodemailer here)
+    console.log('RESET LINK:', resetLink);
+
+    res.json({
+      success: true,
+      message: 'If the email exists, a reset link has been sent',
+      data: null,
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to process request',
+    });
+  }
+});
+
 
   // Get user's listings
 app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
