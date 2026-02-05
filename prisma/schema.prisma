@@ -30,6 +30,8 @@ model User {
   isBlocked           Boolean                @default(false) @map("is_blocked")
   avatarUrl           String?                @map("avatar_url") @db.VarChar(500)
   bio                 String?                @db.Text
+  resetPasswordToken   String?   @map("reset_password_token") @db.VarChar(255)
+  resetPasswordExpires DateTime? @map("reset_password_expires")
   jobApplications           JobApplication[]  @relation("UserApplications")
   reviewedJobApplications   JobApplication[]  @relation("ReviewedApplications")
   lastLoginAt         DateTime?              @map("last_login_at")
