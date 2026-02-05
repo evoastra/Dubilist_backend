@@ -20,49 +20,49 @@ model Role {
 }
 
 model User {
-  id                  Int                    @id @default(autoincrement())
-  name                String                 @db.VarChar(100)
-  email               String                 @unique @db.VarChar(255)
-  phone               String?                @db.VarChar(20)
-  passwordHash        String?                @map("password_hash") @db.VarChar(255)
-  roleId              Int                    @map("role_id")
-  isVerified          Boolean                @default(false) @map("is_verified")
-  isBlocked           Boolean                @default(false) @map("is_blocked")
-  avatarUrl           String?                @map("avatar_url") @db.VarChar(500)
-  bio                 String?                @db.Text
-  resetPasswordToken   String?   @map("reset_password_token") @db.VarChar(255)
-  resetPasswordExpires DateTime? @map("reset_password_expires")
-  jobApplications           JobApplication[]  @relation("UserApplications")
-  reviewedJobApplications   JobApplication[]  @relation("ReviewedApplications")
-  lastLoginAt         DateTime?              @map("last_login_at")
-  lastListingPostedAt DateTime?              @map("last_listing_posted_at")
-  lastChatMessageAt   DateTime?              @map("last_chat_message_at")
-  isDeleted           Boolean                @default(false) @map("is_deleted")
-  deletedAt           DateTime?              @map("deleted_at")
-  createdAt           DateTime               @default(now()) @map("created_at")
-  updatedAt           DateTime               @updatedAt @map("updated_at")
-  avatarS3Key         String?                @map("avatar_s3_key") @db.VarChar(500)
-  can_post_listings   Boolean                @default(true)
-  admin_notes         admin_notes[]
-  audit_logs          audit_logs[]
-  chatMessages        ChatMessage[]
-  chatRoomsAsBuyer    ChatRoom[]             @relation("BuyerChats")
-  chatRoomsAsSeller   ChatRoom[]             @relation("SellerChats")
-  designerBookings    DesignerBooking[]
-  designerReviews     DesignerReview[]
-  designer            Designer?
-  favorites           Favorite[]
-  fraudLogs           FraudLog[]
-  listings            Listing[]
-  notifications       Notification[]
-  recentlyViewed      RecentlyViewed[]
-  refreshTokens       RefreshToken[]
-  listingReports      ReportedListing[]
-  reportsAgainstMe    ReportedUser[]         @relation("ReportedUser")
-  reportedByMe        ReportedUser[]         @relation("Reporter")
-  supportMessages     SupportTicketMessage[]
-  supportTickets      SupportTicket[]
-  role                Role                   @relation(fields: [roleId], references: [id])
+  id                      Int                    @id @default(autoincrement())
+  name                    String                 @db.VarChar(100)
+  email                   String                 @unique @db.VarChar(255)
+  phone                   String?                @db.VarChar(20)
+  passwordHash            String?                @map("password_hash") @db.VarChar(255)
+  roleId                  Int                    @map("role_id")
+  isVerified              Boolean                @default(false) @map("is_verified")
+  isBlocked               Boolean                @default(false) @map("is_blocked")
+  avatarUrl               String?                @map("avatar_url") @db.VarChar(500)
+  bio                     String?                @db.Text
+  lastLoginAt             DateTime?              @map("last_login_at")
+  lastListingPostedAt     DateTime?              @map("last_listing_posted_at")
+  lastChatMessageAt       DateTime?              @map("last_chat_message_at")
+  isDeleted               Boolean                @default(false) @map("is_deleted")
+  deletedAt               DateTime?              @map("deleted_at")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  avatarS3Key             String?                @map("avatar_s3_key") @db.VarChar(500)
+  can_post_listings       Boolean                @default(true)
+  resetPasswordExpires    DateTime?              @map("reset_password_expires")
+  resetPasswordToken      String?                @map("reset_password_token") @db.VarChar(255)
+  admin_notes             admin_notes[]
+  audit_logs              audit_logs[]
+  chatMessages            ChatMessage[]
+  chatRoomsAsBuyer        ChatRoom[]             @relation("BuyerChats")
+  chatRoomsAsSeller       ChatRoom[]             @relation("SellerChats")
+  designerBookings        DesignerBooking[]
+  designerReviews         DesignerReview[]
+  designer                Designer?
+  favorites               Favorite[]
+  fraudLogs               FraudLog[]
+  reviewedJobApplications JobApplication[]       @relation("ReviewedApplications")
+  jobApplications         JobApplication[]       @relation("UserApplications")
+  listings                Listing[]
+  notifications           Notification[]
+  recentlyViewed          RecentlyViewed[]
+  refreshTokens           RefreshToken[]
+  listingReports          ReportedListing[]
+  reportsAgainstMe        ReportedUser[]         @relation("ReportedUser")
+  reportedByMe            ReportedUser[]         @relation("Reporter")
+  supportMessages         SupportTicketMessage[]
+  supportTickets          SupportTicket[]
+  role                    Role                   @relation(fields: [roleId], references: [id])
 
   @@index([email])
   @@index([phone])
@@ -73,70 +73,45 @@ model User {
 }
 
 model JobApplication {
-  id                Int       @id @default(autoincrement())
-  jobListingId      Int       @map("job_listing_id")
-  userId            Int       @map("user_id")
-  
-
-  
-  // Applicant details
-  name              String    @db.VarChar(100)
-  dob               DateTime? @map("dob")
-  email             String    @db.VarChar(255)
-  mobileNo          String    @map("mobile_no") @db.VarChar(20)
+  id                Int                  @id @default(autoincrement())
+  jobListingId      Int                  @map("job_listing_id")
+  userId            Int                  @map("user_id")
+  name              String               @db.VarChar(100)
+  dob               DateTime?            @map("dob")
+  email             String               @db.VarChar(255)
+  mobileNo          String               @map("mobile_no") @db.VarChar(20)
   languages         Json?
-  nationality       String?   @db.VarChar(100)
-  location          String?   @db.VarChar(200)
-  visaStatus        String?   @map("visa_status") @db.VarChar(100)
-  
-  // Resume
-  resumeUrl         String    @map("resume_url") @db.VarChar(500)
-  resumeS3Key       String?   @map("resume_s3_key") @db.VarChar(500)
-  
-  // Qualifications
-  qualification     String?   @db.VarChar(255)
-  jobStatus         String    @map("job_status") @db.VarChar(50) // fresher/experienced
-  yearsOfExperience Int?      @map("years_of_experience")
-  
-  // Salary
-  salaryExpectation Float?    @map("salary_expectation")
-  salaryCurrency    String    @default("AED") @map("salary_currency") @db.VarChar(10)
-  
-  // Additional
-  coverLetter       String?   @map("cover_letter") @db.Text
-  portfolioUrl      String?   @map("portfolio_url") @db.VarChar(500)
-  linkedinUrl       String?   @map("linkedin_url") @db.VarChar(500)
-  
-  // Status
+  nationality       String?              @db.VarChar(100)
+  location          String?              @db.VarChar(200)
+  visaStatus        String?              @map("visa_status") @db.VarChar(100)
+  resumeUrl         String               @map("resume_url") @db.VarChar(500)
+  resumeS3Key       String?              @map("resume_s3_key") @db.VarChar(500)
+  qualification     String?              @db.VarChar(255)
+  jobStatus         String               @map("job_status") @db.VarChar(50)
+  yearsOfExperience Int?                 @map("years_of_experience")
+  salaryExpectation Float?               @map("salary_expectation")
+  salaryCurrency    String               @default("AED") @map("salary_currency") @db.VarChar(10)
+  coverLetter       String?              @map("cover_letter") @db.Text
+  portfolioUrl      String?              @map("portfolio_url") @db.VarChar(500)
+  linkedinUrl       String?              @map("linkedin_url") @db.VarChar(500)
   status            JobApplicationStatus @default(pending)
-  employerNotes     String?   @map("employer_notes") @db.Text
-  reviewedAt        DateTime? @map("reviewed_at")
-  reviewedBy        Int?      @map("reviewed_by")
-  
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  
-  // Relations
-  user              User      @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
-  jobListing        Listing   @relation("JobApplications", fields: [jobListingId], references: [id], onDelete: Cascade)
-  reviewer          User?     @relation("ReviewedApplications", fields: [reviewedBy], references: [id])
-  
+  employerNotes     String?              @map("employer_notes") @db.Text
+  reviewedAt        DateTime?            @map("reviewed_at")
+  reviewedBy        Int?                 @map("reviewed_by")
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+  jobListing        Listing              @relation("JobApplications", fields: [jobListingId], references: [id], onDelete: Cascade)
+  reviewer          User?                @relation("ReviewedApplications", fields: [reviewedBy], references: [id])
+  user              User                 @relation("UserApplications", fields: [userId], references: [id], onDelete: Cascade)
+
   @@index([jobListingId])
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([reviewedBy], map: "job_applications_reviewed_by_fkey")
   @@map("job_applications")
 }
 
-enum JobApplicationStatus {
-  pending
-  reviewing
-  shortlisted
-  rejected
-  accepted
-  
-  @@map("job_application_status")
-}
 model RefreshToken {
   id        Int       @id @default(autoincrement())
   userId    Int       @map("user_id")
@@ -179,7 +154,6 @@ model Listing {
   title             String             @db.VarChar(255)
   description       String             @db.Text
   price             Decimal            @db.Decimal(12, 2)
-   jobApplications   JobApplication[]  @relation("JobApplications")
   currency          String             @default("AED") @db.VarChar(10)
   categoryId        Int                @map("category_id")
   city              String?            @db.VarChar(100)
@@ -209,6 +183,7 @@ model Listing {
   electronicDetails ElectronicListing?
   favorites         Favorite[]
   furnitureDetails  FurnitureListing?
+  jobApplications   JobApplication[]   @relation("JobApplications")
   jobDetails        JobListing?
   images            ListingImage[]
   category          Category           @relation(fields: [categoryId], references: [id])
@@ -276,7 +251,7 @@ model MotorListing {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
   price           Decimal? @db.Decimal(12, 2)
-  currency String? @default("AED") @db.VarChar(10)
+  currency        String?  @default("AED") @db.VarChar(10)
   listing         Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
 
   @@index([make])
@@ -502,8 +477,8 @@ model Favorite {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   listingId Int      @map("listing_id")
-  images    Json?    // ✅ ADD THIS - Store favorite item images
   createdAt DateTime @default(now()) @map("created_at")
+  images    Json?
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -607,9 +582,6 @@ model ReportedListing {
   @@map("reported_listings")
 }
 
-
-
-
 model FraudLog {
   id         Int      @id @default(autoincrement())
   userId     Int?     @map("user_id")
@@ -632,11 +604,10 @@ model SearchLog {
   userId       Int?     @map("user_id")
   query        String   @db.VarChar(500)
   filters      Json?
-  images       Json? 
-
   resultsCount Int      @default(0) @map("results_count")
   ipAddress    String?  @map("ip_address") @db.VarChar(50)
   createdAt    DateTime @default(now()) @map("created_at")
+  images       Json?
 
   @@index([createdAt])
   @@map("search_logs")
@@ -864,17 +835,17 @@ model DesignerReview {
 }
 
 model admin_notes {
-  id          Int      @id @default(autoincrement())
-  listing_id  Int
-  admin_id    Int
-  content     String   @db.Text
-   images      Json?    // ✅ ADD THIS - Store admin note images
-  images_s3_keys Json? // ✅ ADD THIS - Store S3 keys for deletion
-  is_internal Boolean  @default(true)
-  created_at  DateTime @default(now())
-  updated_at  DateTime
-  users       User     @relation(fields: [admin_id], references: [id], onDelete: Cascade)
-  listings    Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade)
+  id             Int      @id @default(autoincrement())
+  listing_id     Int
+  admin_id       Int
+  content        String   @db.Text
+  is_internal    Boolean  @default(true)
+  created_at     DateTime @default(now())
+  updated_at     DateTime
+  images         Json?
+  images_s3_keys Json?
+  users          User     @relation(fields: [admin_id], references: [id], onDelete: Cascade)
+  listings       Listing  @relation(fields: [listing_id], references: [id], onDelete: Cascade)
 
   @@index([admin_id])
   @@index([created_at])
@@ -919,6 +890,16 @@ model role_permissions {
   @@unique([role_id, permission_id])
   @@index([permission_id])
   @@index([role_id])
+}
+
+enum JobApplicationStatus {
+  pending
+  reviewing
+  shortlisted
+  rejected
+  accepted
+
+  @@map("job_application_status")
 }
 
 enum ListingStatus {
