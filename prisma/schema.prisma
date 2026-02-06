@@ -477,6 +477,7 @@ model Favorite {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   listingId Int      @map("listing_id")
+  imagesS3Keys   Json?    @map("images_s3_keys")
   createdAt DateTime @default(now()) @map("created_at")
   images    Json?
   listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)

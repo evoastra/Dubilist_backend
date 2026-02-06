@@ -2304,14 +2304,14 @@ listingsCache.flushAll();
   
 app.use('/api', jobApplicationsRoutes);
   // Add to favorites
- app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {
+// Add to favorites - FIXED VERSION
+app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {
   try {
     const listingId = parseInt(req.params.listingId);
     const userId = req.user.id;
 
-    // Get images from request body
+    // ✅ Get images from request body (JSON array of URLs)
     const images = req.body.images || null;
-    const imagesS3Keys = req.body.imagesS3Keys || req.body.images_s3_keys || null;
 
     const listing = await prisma.listing.findUnique({ where: { id: listingId } });
     
@@ -2339,13 +2339,13 @@ app.use('/api', jobApplicationsRoutes);
       });
     }
 
-    // Create favorite with images
+    // ✅ FIX: Create favorite WITH images (only this field exists)
     const favorite = await prisma.favorite.create({
       data: {
         userId,
         listingId,
-        images,
-        imagesS3Keys
+        images // ✅ This field exists in schema
+        // ❌ REMOVED: imagesS3Keys - doesn't exist in schema
       }
     });
 
@@ -2364,7 +2364,7 @@ app.use('/api', jobApplicationsRoutes);
     console.error('Add favorite error:', error);
     res.status(500).json({ 
       success: false, 
-      error: { message: 'Failed to add favorite' } 
+      error: { message: 'Failed to add favorite', details: error.message } 
     });
   }
 });
