@@ -879,7 +879,23 @@ model permissions {
   created_at       DateTime           @default(now())
   role_permissions role_permissions[]
 }
-
+model OtpRequest {
+  id         Int       @id @default(autoincrement())
+  userId     Int?
+  phone      String?   // Make optional
+  email      String?   // Add this field
+  otpHash    String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  
+  user User? @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([phone])
+  @@index([email])   // Add this index
+  @@index([expiresAt])
+}
 model role_permissions {
   id            Int         @id @default(autoincrement())
   role_id       Int

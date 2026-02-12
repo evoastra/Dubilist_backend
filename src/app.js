@@ -854,6 +854,11 @@ app.post('/api/auth/reset-password', async (req, res) => {
 
 const crypto = require('crypto');
 
+// ===========================================
+// PASSWORD RESET WITH OTP (Replace existing)
+// ===========================================
+
+// Step 1: Request OTP
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -865,47 +870,122 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
 
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    // Always return success (security best practice)
-    if (!user) {
-      return res.json({
-        success: true,
-        message: 'If the email exists, a reset link has been sent',
-        data: null,
-      });
-    }
-
-    const token = crypto.randomBytes(32).toString('hex');
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        resetPasswordToken: token,
-        resetPasswordExpires: new Date(Date.now() + 60 * 60 * 1000), // 1 hour
-      },
-    });
-
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${token}`;
-
-    // 🔔 SEND EMAIL (plug SendGrid/Nodemailer here)
-    console.log('RESET LINK:', resetLink);
+    // Use OTP service
+    const { otpService } = require('./modules/otp/otp.service');
+    const result = await otpService.sendPasswordResetOTP(email);
 
     res.json({
       success: true,
-      message: 'If the email exists, a reset link has been sent',
-      data: null,
+      message: result.message,
+      data: { expiresIn: result.expiresIn },
     });
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: 'Failed to process request',
+      message: error.message || 'Failed to process request',
     });
   }
 });
 
+// Step 2: Verify OTP and get reset token
+app.post('/api/auth/verify-reset-otp', async (req, res) => {
+  try {
+    const { email, otp } = req.body;
 
+    if (!email || !otp) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and OTP are required',
+      });
+    }
+
+    const { otpService } = require('./modules/otp/otp.service');
+    const result = await otpService.verifyPasswordResetOTP(email, otp);
+
+    res.json({
+      success: true,
+      message: result.message,
+      data: { resetToken: result.resetToken },
+    });
+  } catch (error) {
+    console.error('Verify OTP error:', error);
+    res.status(error.statusCode || 400).json({
+      success: false,
+      message: error.message || 'Invalid or expired OTP',
+    });
+  }
+});
+
+// Step 3: Reset password with token
+app.post('/api/auth/reset-password', async (req, res) => {
+  try {
+    const { resetToken, password } = req.body;
+
+    if (!resetToken || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Reset token and password are required',
+      });
+    }
+
+    if (!validatePassword(password)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Password must be at least 8 characters, include uppercase, lowercase, and a number',
+      });
+    }
+
+    // Hash the reset token
+    const crypto = require('crypto');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    const user = await prisma.user.findFirst({
+      where: {
+        resetPasswordToken: resetTokenHash,
+        resetPasswordExpires: { gt: new Date() },
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired reset token',
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        passwordHash,
+        resetPasswordToken: null,
+        resetPasswordExpires: null,
+      },
+    });
+
+    // Send success email
+    const { sendPasswordResetSuccessEmail } = require('./utils/emailService');
+    await sendPasswordResetSuccessEmail(user.email, user.name).catch(() => {});
+
+    res.json({
+      success: true,
+      message: 'Password has been reset successfully',
+      data: null,
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reset password',
+    });
+  }
+});
+
+// Add this with other route mounts
+app.use('/api/otp', require('./modules/otp/otp.routes'));
   // Get user's listings
 app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
   try {
