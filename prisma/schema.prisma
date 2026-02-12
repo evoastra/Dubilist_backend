@@ -26,6 +26,7 @@ model User {
   phone                   String?                @db.VarChar(20)
   passwordHash            String?                @map("password_hash") @db.VarChar(255)
   roleId                  Int                    @map("role_id")
+  otpRequests OtpRequest[]
   isVerified              Boolean                @default(false) @map("is_verified")
   isBlocked               Boolean                @default(false) @map("is_blocked")
   avatarUrl               String?                @map("avatar_url") @db.VarChar(500)
