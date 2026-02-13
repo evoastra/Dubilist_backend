@@ -8,7 +8,8 @@ const { env } = require('../../config/env');
 const { generateOTP, hashOTP } = require('../../utils/crypto');
 const { generateTokenPair } = require('../../utils/token');
 const { ApiError } = require('../../middleware/errorHandler');
-const { sendOTPEmail } = require('../../utils/emailService');
+
+
 
 class OTPService {
   // Send OTP to email for password reset
