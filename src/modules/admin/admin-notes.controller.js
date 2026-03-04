@@ -31,7 +31,7 @@ class AdminNotesController {
   async addNote(req, res) {
     try {
       const listingId = parseInt(req.params.listingId);
-      const { content, isInternal = true } = req.body;
+     const { content, isInternal = true, imagesS3Keys } = req.body;  
 
       const note = await adminNotesService.addNote(
         listingId,

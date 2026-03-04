@@ -120,7 +120,6 @@ router.post('/users/:id/impersonate', adminController.impersonateUser);
 router.get('/audit-logs', validate(auditLogsQuerySchema, 'query'), adminController.getAuditLogs);
 
 
-
 /**
  * @route   DELETE /api/admin/categories/:id
  * @desc    Delete category

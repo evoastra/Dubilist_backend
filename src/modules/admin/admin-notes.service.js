@@ -10,7 +10,7 @@ class AdminNotesService {
   /**
    * Add note to listing
    */
-  async addNote(listingId, adminId, content, isInternal = true) {
+  async addNote(listingId, adminId, content, isInternal = true, imagesS3Keys = null) {
     const listing = await prisma.listing.findUnique({
       where: { id: listingId },
     });
@@ -25,6 +25,7 @@ class AdminNotesService {
         adminId,
         content,
         isInternal,
+         ...(imagesS3Keys && { imagesS3Keys }),
       },
       include: {
         admin: { select: { id: true, name: true } },

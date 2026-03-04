@@ -2662,7 +2662,13 @@ app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {
           include: {
             category: { select: { id: true, name: true } },
             images: { take: 1, orderBy: { orderIndex: 'asc' } },
-            user: { select: { id: true, name: true } }
+            user: { select: { id: true, name: true } },
+                motorDetails: { select: { images: true } },
+      jobDetails: { select: { companyLogoUrl: true } },
+      propertyDetails: { select: { images: true } },
+      classifiedDetails: { select: { images: true } },
+      electronicDetails: { select: { images: true } },
+      furnitureDetails: { select: { images: true } },
           },
           orderBy: { createdAt: 'desc' },
           skip,
@@ -2670,6 +2676,22 @@ app.post('/api/favorites/:listingId', authenticateToken, async (req, res) => {
         }),
         prisma.listing.count({ where })
       ]);
+      const enhancedListings = listings.map(listing => {
+  let mergedImages = [...(listing.images || [])];
+  if (listing.motorDetails?.images?.length)
+    mergedImages.push(...listing.motorDetails.images.map((url, idx) => ({ id: `motor-${idx}`, imageUrl: url, orderIndex: idx, isPrimary: false })));
+  if (listing.jobDetails?.companyLogoUrl)
+    mergedImages.unshift({ id: 'job-logo', imageUrl: listing.jobDetails.companyLogoUrl, orderIndex: 0, isPrimary: true });
+  if (listing.propertyDetails?.images?.length)
+    mergedImages.push(...listing.propertyDetails.images.map((url, idx) => ({ id: `property-${idx}`, imageUrl: url, orderIndex: idx, isPrimary: false })));
+  if (listing.classifiedDetails?.images?.length)
+    mergedImages.push(...listing.classifiedDetails.images.map((url, idx) => ({ id: `classified-${idx}`, imageUrl: url, orderIndex: idx, isPrimary: false })));
+  if (listing.electronicDetails?.images?.length)
+    mergedImages.push(...listing.electronicDetails.images.map((url, idx) => ({ id: `electronic-${idx}`, imageUrl: url, orderIndex: idx, isPrimary: false })));
+  if (listing.furnitureDetails?.images?.length)
+    mergedImages.push(...listing.furnitureDetails.images.map((url, idx) => ({ id: `furniture-${idx}`, imageUrl: url, orderIndex: idx, isPrimary: false })));
+  return { ...listing, images: mergedImages.slice(0, 1) };
+});
 const resultImages = listings.slice(0, 5).map(listing => {
   if (listing.images && listing.images.length > 0) {
     return listing.images[0].imageUrl;
@@ -2690,7 +2712,7 @@ const resultImages = listings.slice(0, 5).map(listing => {
 
       res.json({
         success: true,
-        data: listings,
+         data: enhancedListings,
         pagination: {
           page: parsedPage,
           limit: parsedLimit,
@@ -3159,15 +3181,55 @@ app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
   // Create/get chat room
   app.post('/api/chat/rooms', authenticateToken, async (req, res) => {
     try {
-      const { listingId } = req.body;
+      const { listingId ,  designerId } = req.body;
 
-      // Validate listingId
-      if (!listingId) {
-        return res.status(400).json({ 
-          success: false, 
-          error: { message: 'listingId is required' } 
+
+       if (designerId && !listingId) {
+      const parsedDesignerId = parseInt(designerId);
+      if (isNaN(parsedDesignerId)) {
+        return res.status(400).json({ success: false, error: { message: 'designerId must be a valid number' } });
+      }
+
+      const designer = await prisma.designer.findFirst({
+        where: { id: parsedDesignerId, isDeleted: false },
+        select: { id: true, userId: true }
+      });
+
+      if (!designer) {
+        return res.status(404).json({ success: false, error: { message: 'Designer not found' } });
+      }
+
+      if (designer.userId === req.user.id) {
+        return res.status(400).json({ success: false, error: { message: 'Cannot chat with yourself' } });
+      }
+
+      // Use listingId = null, sellerId = designer's userId
+      let room = await prisma.chatRoom.findFirst({
+        where: {
+          listingId: null,
+          buyerId: req.user.id,
+          sellerId: designer.userId
+        }
+      });
+
+      if (!room) {
+        room = await prisma.chatRoom.create({
+          data: {
+            listingId: null,         // nullable in schema
+            buyerId: req.user.id,
+            sellerId: designer.userId
+          }
         });
       }
+
+      return res.json({ success: true, data: room });
+    }
+
+    // ── Listing chat (existing logic) ─────────────────────────
+    if (!listingId) {
+      return res.status(400).json({ success: false, error: { message: 'listingId or designerId is required' } });
+    }
+ 
 
       const parsedListingId = parseInt(listingId);
       if (isNaN(parsedListingId)) {

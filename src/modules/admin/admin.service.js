@@ -134,6 +134,8 @@ class AdminService {
         name: u.name,
         email: u.email,
         phone: u.phone,
+            avatarUrl: u.avatarUrl,      // ✅ ADD THIS
+    bio: u.bio, 
         role: u.role.name,
         isVerified: u.isVerified,
         isBlocked: u.isBlocked,

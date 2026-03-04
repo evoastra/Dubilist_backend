@@ -29,6 +29,12 @@ const BOOKING_SELECT = {
   isPaid: true,
   confirmedAt: true,
   completedAt: true,
+    userNotes: true,
+  userName: true,        // ✅ ADD
+  userPhone: true,       // ✅ ADD
+  userAddress: true,     // ✅ ADD
+  projectType: true,     // ✅ ADD
+  projectDescription: true, 
   cancelledAt: true,
   cancellationReason: true,
   rejectionReason: true,
@@ -157,7 +163,12 @@ const createBooking = async (data, designer) => {
       meetingLocation: data.meetingLocation,
       fee: data.fee,
       currency: data.currency,
-      status: 'pending'
+      status: 'pending',
+            userName: data.userName || null,
+      userPhone: data.userPhone || null,
+      userAddress: data.userAddress || null,
+      projectType: data.projectType || null,
+      projectDescription: data.projectDescription || null,
     },
     select: BOOKING_SELECT
   });
