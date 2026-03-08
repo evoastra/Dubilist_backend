@@ -101,15 +101,15 @@ const getAllDesigners = async ({ page, limit, filters, sortBy, sortOrder }) => {
 
   // Location filter (case-insensitive contains)
   if (filters.location) {
-    where.location = { contains: filters.location, mode: 'insensitive' };
+where.location = { contains: filters.location };
   }
 
   if (filters.city) {
-    where.city = { contains: filters.city, mode: 'insensitive' };
+    where.city = { contains: filters.city };
   }
 
   if (filters.country) {
-    where.country = { contains: filters.country, mode: 'insensitive' };
+where.country = { contains: filters.country };
   }
 
   // Services filter (JSON array contains)
@@ -630,11 +630,11 @@ const adminGetAllDesigners = async ({ page, limit, isActive, isVerified, search 
   if (isActive !== undefined) where.isActive = isActive;
   if (isVerified !== undefined) where.isVerified = isVerified;
   if (search) {
-    where.OR = [
-      { location: { contains: search, mode: 'insensitive' } },
-      { user: { name: { contains: search, mode: 'insensitive' } } },
-      { user: { email: { contains: search, mode: 'insensitive' } } }
-    ];
+where.OR = [
+  { location: { contains: search } },
+  { user: { name: { contains: search } } },
+  { user: { email: { contains: search } } }
+];
   }
 
   const [designers, total] = await Promise.all([

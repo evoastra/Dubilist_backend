@@ -3204,13 +3204,13 @@ app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
       }
 
       // Use listingId = null, sellerId = designer's userId
-      let room = await prisma.chatRoom.findFirst({
-        where: {
-          listingId: null,
-          buyerId: req.user.id,
-          sellerId: designer.userId
-        }
-      });
+   let room = await prisma.chatRoom.findFirst({
+  where: {
+    listingId: null,          // ✅ works after migration
+    buyerId: req.user.id,
+    sellerId: designer.userId
+  }
+});
 
       if (!room) {
         room = await prisma.chatRoom.create({

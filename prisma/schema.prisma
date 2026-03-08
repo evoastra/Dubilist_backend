@@ -507,8 +507,9 @@ model RecentlyViewed {
 
 model ChatRoom {
   id        Int           @id @default(autoincrement())
-  listingId Int           @map("listing_id")
+ 
   buyerId   Int           @map("buyer_id")
+  listingId Int?          @map("listing_id")
   sellerId  Int           @map("seller_id")
   isBlocked Boolean       @default(false) @map("is_blocked")
   blockedBy Int?          @map("blocked_by")
@@ -516,7 +517,7 @@ model ChatRoom {
   updatedAt DateTime      @updatedAt @map("updated_at")
   messages  ChatMessage[]
   buyer     User          @relation("BuyerChats", fields: [buyerId], references: [id])
-  listing   Listing       @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  listing   Listing?      @relation(fields: [listingId], references: [id], onDelete: Restrict)
   seller    User          @relation("SellerChats", fields: [sellerId], references: [id])
 
   @@unique([listingId, buyerId, sellerId])
