@@ -53,41 +53,45 @@ class AdminService {
   /**
    * Get dashboard statistics
    */
-  async getDashboardStats() {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+async getDashboardStats() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-    const [
-      totalUsers,
-      totalListings,
-      pendingListings,
-      activeListings,
-      todayUsers,
-      todayListings,
-      totalReports,
-      pendingReports
-    ] = await Promise.all([
-      prisma.user.count({ where: { isDeleted: false } }),
-      prisma.listing.count({ where: { isDeleted: false } }),
-      prisma.listing.count({ where: { status: 'pending' } }),
-      prisma.listing.count({ where: { status: 'approved', isDeleted: false } }),
-      prisma.user.count({ where: { createdAt: { gte: today } } }),
-      prisma.listing.count({ where: { createdAt: { gte: today } } }),
-      prisma.reportedListing.count(),
-      prisma.reportedListing.count({ where: { status: 'pending' } })
-    ]);
+  const [
+    totalUsers,
+    totalListings,
+    pendingListings,
+    activeListings,
+    todayUsers,
+    todayListings,
+    totalListingReports,
+    pendingListingReports,
+    totalUserReports,
+    pendingUserReports
+  ] = await Promise.all([
+    prisma.user.count({ where: { isDeleted: false } }),
+    prisma.listing.count({ where: { isDeleted: false } }),
+    prisma.listing.count({ where: { status: 'pending' } }),
+    prisma.listing.count({ where: { status: 'approved', isDeleted: false } }),
+    prisma.user.count({ where: { createdAt: { gte: today } } }),
+    prisma.listing.count({ where: { createdAt: { gte: today } } }),
+    prisma.reportedListing.count(),
+    prisma.reportedListing.count({ where: { status: 'pending' } }),
+    prisma.reportedUser.count(),
+    prisma.reportedUser.count({ where: { status: 'pending' } })
+  ]);
 
-    return {
-      totalUsers,
-      totalListings,
-      pendingListings,
-      activeListings,
-      todayUsers,
-      todayListings,
-      totalReports,
-      pendingReports
-    };
-  }
+  return {
+    totalUsers,
+    totalListings,
+    pendingListings,
+    activeListings,
+    todayUsers,
+    todayListings,
+    totalReports: totalListingReports + totalUserReports,
+    pendingReports: pendingListingReports + pendingUserReports
+  };
+}
 
   // ==========================================
   // USER MANAGEMENT
@@ -298,7 +302,10 @@ class AdminService {
     const { page = 1, limit = 50, action, userId } = filters;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    const where = {
+      isDeleted: false
+    };
+    
     if (action) where.action = action;
     if (userId) where.actorUserId = parseInt(userId, 10);
 
@@ -381,10 +388,10 @@ class AdminService {
     }
 
     if (search) {
-      where.OR = [
-        { title: { contains: search, mode: 'insensitive' } },
-        { description: { contains: search, mode: 'insensitive' } }
-      ];
+     where.OR = [
+  { name: { contains: search } },
+  { email: { contains: search } }
+];
     }
 
     const [listings, total] = await Promise.all([
@@ -468,7 +475,7 @@ class AdminService {
       listingReports = await prisma.reportedListing.findMany({
         where: status !== 'all' ? { status } : {},
         include: {
-          listing: { select: { id: true, title: true } },
+          listing: { select: { id: true, title: true, category: { select: { id: true, name: true } } } },
           reporter: { select: { id: true, name: true, email: true } }
         },
         orderBy: { createdAt: 'desc' },

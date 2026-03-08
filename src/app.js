@@ -1288,7 +1288,7 @@ app.get('/api/listings', async (req, res) => {
           images: { take: 1, orderBy: { orderIndex: 'asc' } },
           motorDetails: { select: { condition: true, make: true, year: true, images: true } },
           electronicDetails: { select: { condition: true, brand: true, images: true } },
-          furnitureDetails: { select: { condition: true, images: true } },
+         furnitureDetails: { select: { condition: true, images: true, primaryMaterial: true, style: true, brand: true } },
           classifiedDetails: { select: { condition: true, brand: true, images: true } },
           jobDetails: { select: { jobTitle: true, companyName: true, companyLogoUrl: true } },
           propertyDetails: { select: { listingType: true, bedrooms: true, images: true } },
