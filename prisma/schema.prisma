@@ -517,7 +517,7 @@ model ChatRoom {
   updatedAt DateTime      @updatedAt @map("updated_at")
   messages  ChatMessage[]
   buyer     User          @relation("BuyerChats", fields: [buyerId], references: [id])
-  listing   Listing?      @relation(fields: [listingId], references: [id], onDelete: Restrict)
+  listing   Listing?      @relation(fields: [listingId], references: [id], onDelete: SetNull)
   seller    User          @relation("SellerChats", fields: [sellerId], references: [id])
 
   @@unique([listingId, buyerId, sellerId])

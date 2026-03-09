@@ -1,36 +1,40 @@
 // ===========================================
-// OTP SERVICE (Updated with Email Support)
+// OTP SERVICE - Full Implementation
+// File: src/modules/otp/otp.service.js
 // ===========================================
 
 const { prisma } = require('../../config/database');
 const { logger } = require('../../config/logger');
 const { env } = require('../../config/env');
 const { generateOTP, hashOTP } = require('../../utils/crypto');
-const { generateTokenPair } = require('../../utils/token');
 const { ApiError } = require('../../middleware/errorHandler');
-
-
+const {
+  sendOTPEmail,
+  sendPasswordResetSuccessEmail,
+  sendPhoneOTPEmail,
+} = require('../../utils/emailService');
 
 class OTPService {
-  // Send OTP to email for password reset
-  async sendPasswordResetOTP(email) {
-    // Find user by email
-    const user = await prisma.user.findUnique({
-      where: { email },
-    });
 
+  // ==========================================
+  // PASSWORD RESET - SEND OTP (Email)
+  // ==========================================
+  async sendPasswordResetOTP(email) {
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    // Security: don't reveal if email exists
     if (!user) {
-      // Security: Don't reveal if email exists
       return {
         message: 'If the email exists, an OTP has been sent',
         expiresIn: env.OTP_EXPIRY_MINUTES * 60,
       };
     }
 
-    // Check rate limiting
+    // Rate limit check
     const recentRequest = await prisma.otpRequest.findFirst({
       where: {
         userId: user.id,
+        email: user.email,
         createdAt: {
           gt: new Date(Date.now() - env.OTP_COOLDOWN_MINUTES * 60 * 1000),
         },
@@ -40,20 +44,16 @@ class OTPService {
 
     if (recentRequest) {
       const waitTime = Math.ceil(
-        (recentRequest.createdAt.getTime() + env.OTP_COOLDOWN_MINUTES * 60 * 1000 - Date.now()) / 1000
+        (recentRequest.createdAt.getTime() +
+          env.OTP_COOLDOWN_MINUTES * 60 * 1000 -
+          Date.now()) / 1000
       );
-      throw new ApiError(
-        429,
-        'OTP_COOLDOWN',
-        `Please wait ${waitTime} seconds before requesting another OTP`
-      );
+      throw new ApiError(429, 'OTP_COOLDOWN', `Please wait ${waitTime} seconds before requesting another OTP`);
     }
 
-    // Generate OTP
-    const otp = generateOTP(env.OTP_LENGTH);
+    const otp = generateOTP(env.OTP_LENGTH || 6);
     const otpHash = hashOTP(otp);
 
-    // Store OTP request
     await prisma.otpRequest.create({
       data: {
         userId: user.id,
@@ -63,7 +63,6 @@ class OTPService {
       },
     });
 
-    // Send OTP via email
     try {
       await sendOTPEmail(user.email, otp, env.OTP_EXPIRY_MINUTES);
       logger.info({ email: user.email }, 'Password reset OTP sent');
@@ -78,36 +77,34 @@ class OTPService {
     };
   }
 
-  // Verify OTP for password reset
+  // ==========================================
+  // PASSWORD RESET - VERIFY OTP (Email)
+  // ==========================================
   async verifyPasswordResetOTP(email, otp) {
     const otpHash = hashOTP(otp);
 
-    // Find valid OTP request
     const otpRequest = await prisma.otpRequest.findFirst({
       where: {
         email,
         otpHash,
         verifiedAt: null,
         expiresAt: { gt: new Date() },
-        attempts: { lt: env.OTP_MAX_ATTEMPTS },
+        attempts: { lt: env.OTP_MAX_ATTEMPTS || 3 },
       },
       orderBy: { createdAt: 'desc' },
       include: { user: true },
     });
 
     if (!otpRequest) {
-      // Increment attempts on recent requests
+      // Increment attempts on recent unverified requests
       await prisma.otpRequest.updateMany({
         where: {
           email,
           verifiedAt: null,
           expiresAt: { gt: new Date() },
         },
-        data: {
-          attempts: { increment: 1 },
-        },
+        data: { attempts: { increment: 1 } },
       });
-
       throw new ApiError(400, 'INVALID_OTP', 'Invalid or expired OTP');
     }
 
@@ -122,12 +119,11 @@ class OTPService {
     const resetToken = crypto.randomBytes(32).toString('hex');
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
 
-    // Store reset token
     await prisma.user.update({
       where: { id: otpRequest.userId },
       data: {
         resetPasswordToken: resetTokenHash,
-        resetPasswordExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutes
+        resetPasswordExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 min
       },
     });
 
@@ -135,27 +131,157 @@ class OTPService {
 
     return {
       message: 'OTP verified successfully',
-      resetToken, // Send this to frontend
+      resetToken, // raw token sent to frontend
       userId: otpRequest.userId,
     };
   }
 
-  // Send OTP to phone number (existing method)
+  // ==========================================
+  // PHONE OTP - SEND
+  // Since no SMS provider, OTP is sent to the
+  // user's registered email as a fallback.
+  // Replace sendPhoneOTPEmail with SMS later.
+  // ==========================================
   async sendOTP(phone) {
-    // ... existing phone OTP code ...
+    // Find user by phone
+    const user = await prisma.user.findFirst({
+      where: { phone },
+    });
+
+    if (!user) {
+      throw new ApiError(404, 'USER_NOT_FOUND', 'No account found with this phone number');
+    }
+
+    if (!user.email) {
+      throw new ApiError(400, 'NO_EMAIL', 'Account has no email address to deliver OTP');
+    }
+
+    // Rate limit check
+    const recentRequest = await prisma.otpRequest.findFirst({
+      where: {
+        userId: user.id,
+        phone,
+        createdAt: {
+          gt: new Date(Date.now() - (env.OTP_COOLDOWN_MINUTES || 1) * 60 * 1000),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    if (recentRequest) {
+      const waitTime = Math.ceil(
+        (recentRequest.createdAt.getTime() +
+          (env.OTP_COOLDOWN_MINUTES || 1) * 60 * 1000 -
+          Date.now()) / 1000
+      );
+      throw new ApiError(429, 'OTP_COOLDOWN', `Please wait ${waitTime} seconds before requesting another OTP`);
+    }
+
+    const otp = generateOTP(env.OTP_LENGTH || 6);
+    const otpHash = hashOTP(otp);
+
+    await prisma.otpRequest.create({
+      data: {
+        userId: user.id,
+        phone,
+        email: user.email, // store email for delivery
+        otpHash,
+        expiresAt: new Date(Date.now() + (env.OTP_EXPIRY_MINUTES || 10) * 60 * 1000),
+      },
+    });
+
+    try {
+      // TODO: Replace with SMS provider (Twilio/AWS SNS) when available
+      // For now, send OTP to user's registered email
+      await sendPhoneOTPEmail(user.email, otp, phone, env.OTP_EXPIRY_MINUTES || 10);
+      logger.info({ phone, userId: user.id }, 'Phone OTP sent via email (no SMS provider)');
+    } catch (error) {
+      logger.error({ error, phone }, 'Failed to send phone OTP');
+      throw new ApiError(500, 'OTP_SEND_FAILED', 'Failed to send OTP');
+    }
+
+    return {
+      message: 'OTP sent to your registered email address',
+      expiresIn: (env.OTP_EXPIRY_MINUTES || 10) * 60,
+      // In dev mode, log OTP for testing
+      ...(process.env.NODE_ENV === 'development' && { _dev_otp: otp }),
+    };
   }
 
-  // Verify OTP (existing method)
+  // ==========================================
+  // PHONE OTP - VERIFY
+  // ==========================================
   async verifyOTP(phone, otp) {
-    // ... existing phone OTP verification code ...
+    const otpHash = hashOTP(otp);
+
+    const otpRequest = await prisma.otpRequest.findFirst({
+      where: {
+        phone,
+        otpHash,
+        verifiedAt: null,
+        expiresAt: { gt: new Date() },
+        attempts: { lt: env.OTP_MAX_ATTEMPTS || 3 },
+      },
+      orderBy: { createdAt: 'desc' },
+      include: { user: true },
+    });
+
+    if (!otpRequest) {
+      // Increment attempts
+      await prisma.otpRequest.updateMany({
+        where: {
+          phone,
+          verifiedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        data: { attempts: { increment: 1 } },
+      });
+      throw new ApiError(400, 'INVALID_OTP', 'Invalid or expired OTP');
+    }
+
+    // Mark as verified
+    await prisma.otpRequest.update({
+      where: { id: otpRequest.id },
+      data: { verifiedAt: new Date() },
+    });
+
+    // Mark phone as verified on user
+    await prisma.user.update({
+      where: { id: otpRequest.userId },
+      data: { isVerified: true },
+    });
+
+    logger.info({ phone, userId: otpRequest.userId }, 'Phone OTP verified');
+
+    return {
+      message: 'Phone number verified successfully',
+      userId: otpRequest.userId,
+    };
   }
 
-  // Resend OTP
+  // ==========================================
+  // PHONE OTP - RESEND
+  // ==========================================
   async resendOTP(phone) {
-    // ... existing resend code ...
+    // Invalidate existing unexpired OTPs for this phone
+    await prisma.otpRequest.updateMany({
+      where: {
+        phone,
+        verifiedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        expiresAt: new Date(), // expire them now
+      },
+    });
+
+    // Send fresh OTP (reuses sendOTP logic)
+    return this.sendOTP(phone);
   }
 
-  // Sanitize user object
+  // ==========================================
+  // SANITIZE USER
+  // ==========================================
   sanitizeUser(user) {
     const { passwordHash, ...sanitized } = user;
     return {
