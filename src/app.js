@@ -794,63 +794,63 @@ if (!email || !password) {
   });
 const { validatePassword } = require('./utils/passwordValidator');
 
-app.post('/api/auth/reset-password', async (req, res) => {
-  try {
-    const { token, password } = req.body;
+// app.post('/api/auth/reset-password', async (req, res) => {
+//   try {
+//     const { token, password } = req.body;
 
-    if (!token || !password) {
-      return res.status(400).json({
-        success: false,
-        message: 'Token and password are required',
-      });
-    }
+//     if (!token || !password) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Token and password are required',
+//       });
+//     }
 
-    if (!validatePassword(password)) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'Password must be at least 8 characters, include uppercase, lowercase, and a number',
-      });
-    }
+//     if (!validatePassword(password)) {
+//       return res.status(400).json({
+//         success: false,
+//         message:
+//           'Password must be at least 8 characters, include uppercase, lowercase, and a number',
+//       });
+//     }
 
-    const user = await prisma.user.findFirst({
-      where: {
-        resetPasswordToken: token,
-        resetPasswordExpires: { gt: new Date() },
-      },
-    });
+//     const user = await prisma.user.findFirst({
+//       where: {
+//         resetPasswordToken: token,
+//         resetPasswordExpires: { gt: new Date() },
+//       },
+//     });
 
-    if (!user) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid or expired reset token',
-      });
-    }
+//     if (!user) {
+//       return res.status(400).json({
+//         success: false,
+//         message: 'Invalid or expired reset token',
+//       });
+//     }
 
-    const passwordHash = await bcrypt.hash(password, 12);
+//     const passwordHash = await bcrypt.hash(password, 12);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        passwordHash,
-        resetPasswordToken: null,
-        resetPasswordExpires: null,
-      },
-    });
+//     await prisma.user.update({
+//       where: { id: user.id },
+//       data: {
+//         passwordHash,
+//         resetPasswordToken: null,
+//         resetPasswordExpires: null,
+//       },
+//     });
 
-    res.json({
-      success: true,
-      message: 'Password has been reset successfully',
-      data: null,
-    });
-  } catch (error) {
-    console.error('Reset password error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to reset password',
-    });
-  }
-});
+//     res.json({
+//       success: true,
+//       message: 'Password has been reset successfully',
+//       data: null,
+//     });
+//   } catch (error) {
+//     console.error('Reset password error:', error);
+//     res.status(500).json({
+//       success: false,
+//       message: 'Failed to reset password',
+//     });
+//   }
+// });
 
 const crypto = require('crypto');
 
