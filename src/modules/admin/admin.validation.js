@@ -175,6 +175,12 @@ const createCategorySchema = Joi.object({
   }),
   orderIndex: Joi.number().integer().min(0).default(0).messages({
     'number.min': 'Order index cannot be negative'
+  }),
+  imageUrl: Joi.string().uri().allow(null, '').messages({
+    'string.uri': 'Invalid image URL format'
+  }),
+  thumbnails: Joi.array().items(Joi.string().uri()).allow(null).messages({
+    'array.base': 'Thumbnails must be an array of URLs'
   })
 });
 
@@ -191,7 +197,9 @@ const updateCategorySchema = Joi.object({
   description: Joi.string().max(500).allow(null, ''),
   parentId: Joi.number().integer().positive().allow(null),
   orderIndex: Joi.number().integer().min(0),
-  isActive: Joi.boolean()
+  isActive: Joi.boolean(),
+  imageUrl: Joi.string().uri().allow(null, ''),
+  thumbnails: Joi.array().items(Joi.string().uri()).allow(null)
 });
 
 // ==========================================

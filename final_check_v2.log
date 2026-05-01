@@ -1,0 +1,68 @@
+Prisma models: [
+  '_originalClient',
+  '_middlewares',
+  '_createPrismaPromise',
+  '$extends',
+  '_extensions',
+  '_previewFeatures',
+  '_clientVersion',
+  '_activeProvider',
+  '_globalOmit',
+  '_tracingHelper',
+  '_errorFormat',
+  '_runtimeDataModel',
+  '_engineConfig',
+  '_accelerateEngineConfig',
+  '_engine',
+  '_requestHandler',
+  '_metrics',
+  '_appliedParent',
+  'admin_notes',
+  'audit_logs',
+  'permissions',
+  'role_permissions',
+  'role',
+  'user',
+  'jobApplication',
+  'refreshToken',
+  'category',
+  'listing',
+  'listingImage',
+  'motorListing',
+  'jobListing',
+  'propertyListing',
+  'classifiedListing',
+  'electronicListing',
+  'furnitureListing',
+  'favorite',
+  'recentlyViewed',
+  'chatRoom',
+  'chatMessage',
+  'reportedUser',
+  'reportedListing',
+  'fraudLog',
+  'searchLog',
+  'supportTicket',
+  'supportTicketMessage',
+  'notification',
+  'systemConfig',
+  'designer',
+  'designerPortfolio',
+  'designerBooking',
+  'designerReview',
+  'otpRequest',
+  '$parent'
+]
+{"level":30,"time":1774613775328,"env":"development","target":"quaint::pooled","timestamp":"2026-03-27T12:16:15.328Z","msg":"Database info: Starting a mysql pool with 9 connections."}
+{"level":30,"time":1774613778691,"env":"development","attempts":1,"environment":"development","msg":"✅ MySQL Database connected successfully"}
+Uncaught Exception: Error: listen EADDRINUSE: address already in use :::3000
+    at Server.setupListenHandle [as _listen2] (node:net:1940:16)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2102:7)
+    at startServer (E:\vs code compiler\clone dubilist\Dubilist_backend\src\server.js:19:12) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}

@@ -1,7 +1,8 @@
-// ===========================================================================
-// DATABASE CONFIGURATION - MySQL with Prisma (Production Grade)
-// ===========================================================================
+// ===========================================
+// DATABASE CONFIGURATION - MySQL with Prisma
+// ===========================================
 
+require('dotenv').config();
 const { PrismaClient } = require('@prisma/client');
 const { logger } = require('./logger');
 
@@ -47,6 +48,16 @@ const prismaConfig = {
   // Error formatting
   errorFormat: isDevelopment ? 'pretty' : 'minimal',
 };
+
+// ─────────────────────────────────────────────────────────────────────────
+// URL Verification
+// ─────────────────────────────────────────────────────────────────────────
+
+if (!process.env.DATABASE_URL) {
+  console.error('❌ FATAL: DATABASE_URL is not defined in environment variables.');
+  console.error('Please ensure the .env file exists and contains DATABASE_URL.');
+  process.exit(1);
+}
 
 // ─────────────────────────────────────────────────────────────────────────
 // Prisma Client Instance with Singleton Pattern

@@ -1,0 +1,89 @@
+Prisma models: [
+  '_originalClient',
+  '_middlewares',
+  '_createPrismaPromise',
+  '$extends',
+  '_extensions',
+  '_previewFeatures',
+  '_clientVersion',
+  '_activeProvider',
+  '_globalOmit',
+  '_tracingHelper',
+  '_errorFormat',
+  '_runtimeDataModel',
+  '_engineConfig',
+  '_accelerateEngineConfig',
+  '_engine',
+  '_requestHandler',
+  '_metrics',
+  '_appliedParent',
+  'admin_notes',
+  'audit_logs',
+  'permissions',
+  'role_permissions',
+  'role',
+  'user',
+  'jobApplication',
+  'refreshToken',
+  'category',
+  'listing',
+  'listingImage',
+  'motorListing',
+  'jobListing',
+  'propertyListing',
+  'classifiedListing',
+  'electronicListing',
+  'furnitureListing',
+  'favorite',
+  'recentlyViewed',
+  'chatRoom',
+  'chatMessage',
+  'reportedUser',
+  'reportedListing',
+  'fraudLog',
+  'searchLog',
+  'supportTicket',
+  'supportTicketMessage',
+  'notification',
+  'systemConfig',
+  'designer',
+  'designerPortfolio',
+  'designerBooking',
+  'designerReview',
+  'otpRequest',
+  '$parent'
+]
+node:internal/modules/cjs/loader:1424
+  throw err;
+  ^
+
+Error: Cannot find module 'nodemailer'
+Require stack:
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\utils\emailService.js
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\modules\otp\otp.service.js
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\modules\otp\otp.controller.js
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\modules\otp\otp.routes.js
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\app.js
+- E:\vs code compiler\clone dubilist\Dubilist_backend\src\server.js
+    at Module._resolveFilename (node:internal/modules/cjs/loader:1421:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1059:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1064:22)
+    at Module._load (node:internal/modules/cjs/loader:1227:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:328:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:245:24)
+    at Module.require (node:internal/modules/cjs/loader:1504:12)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (E:\vs code compiler\clone dubilist\Dubilist_backend\src\utils\emailService.js:6:20)
+    at Module._compile (node:internal/modules/cjs/loader:1761:14) {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: [
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\utils\\emailService.js',
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\modules\\otp\\otp.service.js',
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\modules\\otp\\otp.controller.js',
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\modules\\otp\\otp.routes.js',
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\app.js',
+    'E:\\vs code compiler\\clone dubilist\\Dubilist_backend\\src\\server.js'
+  ]
+}
+
+Node.js v24.12.0

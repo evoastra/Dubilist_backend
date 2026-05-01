@@ -763,7 +763,9 @@ async getDashboardStats() {
         slug,
         description,
         parentId: parentId ? parseInt(parentId) : null,
-        orderIndex
+        orderIndex,
+        imageUrl: data.imageUrl,
+        thumbnails: data.thumbnails
       }
     });
 
@@ -786,7 +788,9 @@ async getDashboardStats() {
         ...(description !== undefined && { description }),
         ...(parentId !== undefined && { parentId: parentId ? parseInt(parentId) : null }),
         ...(orderIndex !== undefined && { orderIndex }),
-        ...(isActive !== undefined && { isActive })
+        ...(isActive !== undefined && { isActive }),
+        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
+        ...(data.thumbnails !== undefined && { thumbnails: data.thumbnails })
       }
     });
 

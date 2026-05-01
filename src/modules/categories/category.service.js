@@ -24,12 +24,29 @@ class CategoryService {
       orderBy: { orderIndex: 'asc' },
     });
 
-    // Build tree structure
+    // Build tree structure and ensure thumbnails is always an array
     const rootCategories = categories.filter(c => !c.parentId);
-    return rootCategories.map(cat => ({
-      ...cat,
-      listingsCount: cat._count.listings,
-    }));
+    return rootCategories.map(cat => {
+      let thumbnailsArr = [];
+      if (Array.isArray(cat.thumbnails)) {
+        thumbnailsArr = cat.thumbnails;
+      } else if (cat.thumbnails && typeof cat.thumbnails === 'object') {
+        thumbnailsArr = Object.values(cat.thumbnails);
+      } else if (cat.imageUrl) {
+        thumbnailsArr = [cat.imageUrl];
+      }
+      // Optionally, add a placeholder if no images
+      if (!thumbnailsArr.length) {
+        thumbnailsArr = [
+          'https://via.placeholder.com/300x200?text=Photo+Coming+Soon'
+        ];
+      }
+      return {
+        ...cat,
+        listingsCount: cat._count.listings,
+        thumbnails: thumbnailsArr,
+      };
+    });
   }
 
   // Get category by ID or slug
@@ -83,6 +100,8 @@ class CategoryService {
         slug,
         description,
         iconUrl,
+        imageUrl,
+        thumbnails,
         parentId,
         orderIndex,
       },

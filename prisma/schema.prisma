@@ -138,6 +138,7 @@ model Category {
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
   imageUrl    String?    @map("image_url") @db.VarChar(500)
+  thumbnails  Json?      @map("thumbnails")
   orderIndex  Int        @default(0) @map("order_index")
   s3Key       String?    @map("s3_key") @db.VarChar(500)
   parent      Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
