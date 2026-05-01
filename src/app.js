@@ -143,14 +143,14 @@ app.use((req, res, next) => {
 });
 const allowedOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
-  : ["http://localhost:4200"];
+  : ["http://localhost:4200", "https://www.dubilist.ae", "https://dubilist.ae"];
 
 app.use(cors({
   origin: (origin, callback) => {
     // Allow Postman, curl, server-to-server
     if (!origin) return callback(null, true);
 
-    if (allowedOrigins.includes(origin) || origin.includes('localhost')) {
+    if (allowedOrigins.includes(origin) || origin.includes('localhost') || origin.includes('dubilist.ae')) {
       return callback(null, origin);
     }
 
