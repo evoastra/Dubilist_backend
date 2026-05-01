@@ -14,6 +14,8 @@
   const { S3Client, PutObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
   const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
   const multer = require('multer');
+  const fs = require('fs');
+  const path = require('path');
   const designersRoutes = require('./modules/designers/designers.routes');
   const bookingsRoutes = require('./modules/bookings/bookings.routes');
  const jobApplicationsRoutes = require('./modules/jobApplications/jobApplications.routes');
@@ -121,13 +123,16 @@ const uploadResume = multer({
   // MIDDLEWARE
   // ===========================================
 
-  app.use(helmet());
+  app.use(helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
 
 /* ------------------------------
    BODY PARSERS
 ------------------------------ */
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 /* ------------------------------
    LOGGING
@@ -136,29 +141,29 @@ app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} | ${req.method} ${req.originalUrl}`);
   next();
 });
-// const allowedOrigins = process.env.CORS_ORIGIN
-//   ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
-//   : [];
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map(o => o.trim())
+  : ["http://localhost:4200"];
 
-// app.use(cors({
-//   origin: (origin, callback) => {
-//     // Allow Postman, curl, server-to-server
-//     if (!origin) return callback(null, true);
+app.use(cors({
+  origin: (origin, callback) => {
+    // Allow Postman, curl, server-to-server
+    if (!origin) return callback(null, true);
 
-//     if (allowedOrigins.includes(origin)) {
-//       return callback(null, origin); // ✅ IMPORTANT
-//     }
+    if (allowedOrigins.includes(origin) || origin.includes('localhost')) {
+      return callback(null, origin);
+    }
 
-//     console.error("CORS BLOCKED:", origin);
-//     return callback(new Error("Not allowed by CORS"));
-//   },
-//   credentials: true,
-//   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"],
-// }));
+    console.error("CORS BLOCKED:", origin);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
-// // Handle preflight
-// app.options("*", cors());
+// Handle preflight
+app.options("*", cors());
 
 // /* ----------------------------------
 //    HELMET (AFTER CORS)
@@ -310,6 +315,25 @@ app.use((req, res, next) => {
       const folder = req.body.folder || 'listings';
       const s3Key = generateS3Key(folder, req.file.originalname, req.user.id);
 
+      // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
+      if (!process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID.includes('your_aws')) {
+        const uploadDir = path.join(__dirname, '../uploads', folder);
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+        
+        const localPath = path.join(uploadDir, path.basename(s3Key));
+        fs.writeFileSync(localPath, req.file.buffer);
+        
+        const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${folder}/${path.basename(s3Key)}`;
+        
+        return res.status(201).json({
+          success: true,
+          message: 'Image uploaded locally',
+          data: { url: imageUrl, s3Key: s3Key, size: req.file.size, mimetype: req.file.mimetype }
+        });
+      }
+
       const command = new PutObjectCommand({
         Bucket: S3_BUCKET,
         Key: s3Key,
@@ -327,8 +351,8 @@ app.use((req, res, next) => {
         data: { url: imageUrl, s3Key: s3Key, size: req.file.size, mimetype: req.file.mimetype }
       });
     } catch (error) {
-      console.error('S3 upload error:', error);
-      res.status(500).json({ success: false, error: { message: 'Failed to upload image' } });
+      console.error('Upload error:', error);
+      res.status(500).json({ success: false, error: { message: 'Failed to upload image', details: error.message } });
     }
   });
 
@@ -341,6 +365,32 @@ app.use((req, res, next) => {
 
       const folder = req.body.folder || 'listings';
       const uploadedImages = [];
+
+      // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
+      const isLocal = !process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID.includes('your_aws');
+      
+      if (isLocal) {
+        const uploadDir = path.join(__dirname, '../uploads', folder);
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        for (const file of req.files) {
+          const s3Key = generateS3Key(folder, file.originalname, req.user.id);
+          const localPath = path.join(uploadDir, path.basename(s3Key));
+          
+          fs.writeFileSync(localPath, file.buffer);
+          
+          const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${folder}/${path.basename(s3Key)}`;
+          uploadedImages.push({ url: imageUrl, s3Key: s3Key, size: file.size, mimetype: file.mimetype });
+        }
+
+        return res.status(201).json({
+          success: true,
+          message: `${uploadedImages.length} images uploaded locally`,
+          data: uploadedImages
+        });
+      }
 
       for (const file of req.files) {
         const s3Key = generateS3Key(folder, file.originalname, req.user.id);
@@ -364,8 +414,8 @@ app.use((req, res, next) => {
         data: uploadedImages
       });
     } catch (error) {
-      console.error('S3 upload error:', error);
-      res.status(500).json({ success: false, error: { message: 'Failed to upload images' } });
+      console.error('Upload images error:', error);
+      res.status(500).json({ success: false, error: { message: 'Failed to upload images', details: error.message } });
     }
   });
 
@@ -1181,6 +1231,36 @@ app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
         success: false, 
         error: { message: 'Failed to get category' } 
       });
+    }
+  });
+
+  /* ================= CATEGORIES ADMIN ================= */
+
+  // Update category (Admin Only)
+  app.put('/api/admin/categories/:id', authenticateToken, requireAdmin, async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const { name, slug, description, iconUrl, imageUrl, thumbnails, parentId, orderIndex, isActive } = req.body;
+
+      const updated = await prisma.category.update({
+        where: { id },
+        data: {
+          ...(name && { name }),
+          ...(slug && { slug }),
+          ...(description !== undefined && { description }),
+          ...(iconUrl !== undefined && { iconUrl }),
+          ...(imageUrl !== undefined && { imageUrl }),
+          ...(thumbnails !== undefined && { thumbnails }),
+          ...(parentId !== undefined && { parentId }),
+          ...(orderIndex !== undefined && { orderIndex }),
+          ...(isActive !== undefined && { isActive }),
+        }
+      });
+
+      res.json({ success: true, message: 'Category updated', data: updated });
+    } catch (error) {
+      console.error('Update category error:', error);
+      res.status(500).json({ success: false, error: { message: 'Failed to update category' } });
     }
   });
 
@@ -3548,11 +3628,14 @@ app.get('/api/chat/rooms', authenticateToken, async (req, res) => {
 
 
 
+
+// Use modular category routes for all /api/categories endpoints
+const categoryRoutes = require('./modules/categories/category.routes');
+app.use('/api/categories', categoryRoutes);
+
   // ===========================================
   // CATEGORIES ADMIN
   // ===========================================
-
-
 
   // ===========================================
   // SYSTEM CONFIG (Admin)

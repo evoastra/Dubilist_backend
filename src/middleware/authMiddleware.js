@@ -170,6 +170,7 @@ const verifyRefreshToken = async (req, res, next) => {
 };
 
 module.exports = {
+  authenticateToken: authenticate,
   authenticate,
   optionalAuth,
   verifyRefreshToken,

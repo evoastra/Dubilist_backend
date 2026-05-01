@@ -557,10 +557,11 @@ class AdminController {
         data: category
       });
     } catch (error) {
+      require('fs').writeFileSync('C:\\temp\\err.log', error.stack || error.message || String(error));
       console.error('Update category error:', error);
       res.status(500).json({
         success: false,
-        error: { message: 'Failed to update category' }
+        error: { message: 'Failed to update category', details: error.message }
       });
     }
   }
