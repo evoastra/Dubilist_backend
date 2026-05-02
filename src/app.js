@@ -26,6 +26,7 @@ const listingsCache = new NodeCache({
   useClones: false  // Better performance
 });
   const app = express();
+  app.set('trust proxy', true);
 
   // AWS S3 Configuration
   const s3Client = new S3Client({
@@ -325,7 +326,8 @@ app.options("*", cors());
         const localPath = path.join(uploadDir, path.basename(s3Key));
         fs.writeFileSync(localPath, req.file.buffer);
         
-        const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${folder}/${path.basename(s3Key)}`;
+        const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+        const imageUrl = `${baseUrl}/uploads/${folder}/${path.basename(s3Key)}`;
         
         return res.status(201).json({
           success: true,
@@ -381,7 +383,8 @@ app.options("*", cors());
           
           fs.writeFileSync(localPath, file.buffer);
           
-          const imageUrl = `${req.protocol}://${req.get('host')}/uploads/${folder}/${path.basename(s3Key)}`;
+          const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+          const imageUrl = `${baseUrl}/uploads/${folder}/${path.basename(s3Key)}`;
           uploadedImages.push({ url: imageUrl, s3Key: s3Key, size: file.size, mimetype: file.mimetype });
         }
 
