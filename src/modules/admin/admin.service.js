@@ -381,7 +381,7 @@ async getDashboardStats() {
     const { page = 1, limit = 20, status, search } = filters;
     const skip = (page - 1) * limit;
 
-    const where = {};
+    const where = { isDeleted: false };
 
     if (status) {
       where.status = status;

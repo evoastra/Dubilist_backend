@@ -7,7 +7,26 @@ require('dotenv').config();
 const { server } = require('./app');
 const { connectDatabase, disconnectDatabase } = require('./config/database');
 
-const PORT = process.env.PORT || 3000;
+const PORT = parseInt(process.env.PORT, 10) || 3000;
+
+function handleListenError(error) {
+  if (error.code === 'EADDRINUSE') {
+    console.error('');
+    console.error(`❌ Port ${PORT} is already in use.`);
+    console.error(`   Stop the process using port ${PORT}, or change PORT in .env.`);
+    console.error(`   Windows: netstat -ano | findstr :${PORT}`);
+    console.error(`   Then:    taskkill /PID <PID> /F`);
+    console.error('');
+  } else {
+    console.error('❌ Server failed to listen:', error);
+  }
+
+  disconnectDatabase()
+    .catch((disconnectError) => {
+      console.error('❌ Failed to disconnect database:', disconnectError.message);
+    })
+    .finally(() => process.exit(1));
+}
 
 // Start server
 async function startServer() {
@@ -16,6 +35,8 @@ async function startServer() {
     await connectDatabase();
 
     // Start HTTP server with Socket.IO
+    server.once('error', handleListenError);
+
     server.listen(PORT, () => {
       console.log('');
       console.log('==========================================');

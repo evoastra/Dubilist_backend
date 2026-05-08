@@ -2283,11 +2283,6 @@ listingsCache.flushAll();
         error: { message: 'Failed to delete listing' } 
       });
     }
-     
-  res.json({ 
-    success: true, 
-    message: 'Listings cache cleared' 
-  });
   });
 
   // Mark listing as sold
