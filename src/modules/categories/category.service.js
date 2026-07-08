@@ -35,16 +35,10 @@ class CategoryService {
       } else if (cat.imageUrl) {
         thumbnailsArr = [cat.imageUrl];
       }
-      // Optionally, add a placeholder if no images
-      if (!thumbnailsArr.length) {
-        thumbnailsArr = [
-          'https://via.placeholder.com/300x200?text=Photo+Coming+Soon'
-        ];
-      }
       return {
         ...cat,
         listingsCount: cat._count.listings,
-        thumbnails: thumbnailsArr,
+        thumbnails: thumbnailsArr.slice(0, 2),
       };
     });
   }
@@ -83,7 +77,7 @@ class CategoryService {
 
   // Create category (admin)
   async createCategory(data) {
-    const { name, slug, description, iconUrl, parentId, orderIndex = 0 } = data;
+    const { name, slug, description, iconUrl, imageUrl, thumbnails, parentId, orderIndex = 0 } = data;
 
     // Check slug uniqueness
     const existing = await prisma.category.findUnique({
@@ -92,6 +86,10 @@ class CategoryService {
 
     if (existing) {
       throw new ApiError(409, 'SLUG_EXISTS', 'Category with this slug already exists');
+    }
+
+    if (thumbnails !== undefined && (!Array.isArray(thumbnails) || thumbnails.length > 2)) {
+      throw new ApiError(400, 'INVALID_THUMBNAILS', 'Only 2 category images are allowed');
     }
 
     const category = await prisma.category.create({
@@ -129,6 +127,10 @@ class CategoryService {
       if (existing) {
         throw new ApiError(409, 'SLUG_EXISTS', 'Category with this slug already exists');
       }
+    }
+
+    if (data.thumbnails !== undefined && (!Array.isArray(data.thumbnails) || data.thumbnails.length > 2)) {
+      throw new ApiError(400, 'INVALID_THUMBNAILS', 'Only 2 category images are allowed');
     }
 
     const updated = await prisma.category.update({
