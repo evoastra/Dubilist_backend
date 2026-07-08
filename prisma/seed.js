@@ -111,6 +111,12 @@ async function main() {
       orderIndex: 8,
       description: 'Community items and events'
     },
+    {
+      name: 'Home Appliances',
+      slug: 'home-appliances',
+      orderIndex: 9,
+      description: 'Large appliances, kitchen appliances, outdoor appliances, and home utility items'
+    },
   ];
 
   for (const cat of categories) {
@@ -120,7 +126,7 @@ async function main() {
       create: cat,
     });
   }
-  console.log('✅ Categories created (8 categories)');
+  console.log('✅ Categories created (9 categories)');
 
   // ==========================================
   // 4. CREATE ADMIN USER

@@ -58,6 +58,12 @@ router.get('/', validateQuery(listingsQuerySchema), asyncHandler(async (req, res
     where,
     skip,
     take: parseInt(limit, 10),
+    include: {
+      images: {
+        orderBy: { orderIndex: 'asc' }
+      },
+      category: true
+    }
   });
 
   const total = await prisma.listing.count({ where });
@@ -77,9 +83,27 @@ router.get('/', validateQuery(listingsQuerySchema), asyncHandler(async (req, res
 // GET single listing (public)
 router.get('/:id', asyncHandler(async (req, res) => {
   const { id } = req.params;
-  
+
   const listing = await prisma.listing.findUnique({
-    where: { id: parseInt(id, 10) }
+    where: { id: parseInt(id, 10) },
+    include: {
+      images: { orderBy: { orderIndex: 'asc' } },
+      category: true,
+      user: {
+        select: {
+          id: true,
+          name: true,
+          avatarUrl: true,
+          createdAt: true
+        }
+      },
+      motorDetails: true,
+      propertyDetails: true,
+      electronicDetails: true,
+      furnitureDetails: true,
+      classifiedDetails: true,
+      jobDetails: true
+    }
   });
 
   if (!listing || listing.isDeleted) {
@@ -88,6 +112,14 @@ router.get('/:id', asyncHandler(async (req, res) => {
       error: { code: 'NOT_FOUND', message: 'Listing not found' }
     });
   }
+
+  // Increment view count (fire-and-forget; never blocks the response)
+  prisma.listing
+    .update({
+      where: { id: listing.id },
+      data: { viewsCount: { increment: 1 } }
+    })
+    .catch(() => {});
 
   successResponse(res, listing);
 }));

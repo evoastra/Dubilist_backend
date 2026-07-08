@@ -179,8 +179,9 @@ const createCategorySchema = Joi.object({
   imageUrl: Joi.string().uri().allow(null, '').messages({
     'string.uri': 'Invalid image URL format'
   }),
-  thumbnails: Joi.array().items(Joi.string().uri()).allow(null).messages({
-    'array.base': 'Thumbnails must be an array of URLs'
+  thumbnails: Joi.array().items(Joi.string().uri()).max(2).allow(null).messages({
+    'array.base': 'Thumbnails must be an array of URLs',
+    'array.max': 'Only 2 category images are allowed'
   })
 });
 
@@ -199,7 +200,9 @@ const updateCategorySchema = Joi.object({
   orderIndex: Joi.number().integer().min(0),
   isActive: Joi.boolean(),
   imageUrl: Joi.string().uri().allow(null, ''),
-  thumbnails: Joi.array().items(Joi.string().uri()).allow(null)
+  thumbnails: Joi.array().items(Joi.string().uri()).max(2).allow(null).messages({
+    'array.max': 'Only 2 category images are allowed'
+  })
 });
 
 // ==========================================
