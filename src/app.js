@@ -185,6 +185,36 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads'), {
   lastModified: true,
 }));
 
+/* ------------------------------------------------------------------
+   IMAGE URL NORMALIZATION
+   Uploaded image URLs are stored absolute (e.g. saved as
+   "http://localhost:3000/uploads/...") because the app writes whatever
+   host performed the upload. Since localhost/dev and production share the
+   same database, a URL baked with "localhost" is unreachable for anyone
+   but the uploader. This middleware rewrites any localhost/127.0.0.1
+   "/uploads/..." URL in JSON responses to the current public base URL, so
+   every environment serves images from its own reachable host.
+
+   Set BASE_URL in production (e.g. BASE_URL=https://www.dubilist.ae) so the
+   correct absolute (https) host is always used.
+------------------------------------------------------------------ */
+app.use((req, res, next) => {
+  const publicBase = (process.env.BASE_URL || `${req.protocol}://${req.get('host')}`).replace(/\/+$/, '');
+  const originalJson = res.json.bind(res);
+  res.json = (body) => {
+    try {
+      const rewritten = JSON.stringify(body).replace(
+        /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(\/uploads\/)/g,
+        `${publicBase}$1`
+      );
+      return originalJson(JSON.parse(rewritten));
+    } catch (e) {
+      return originalJson(body); // never let normalization break a response
+    }
+  };
+  next();
+});
+
 /* ------------------------------
    LOGGING
 ------------------------------ */
