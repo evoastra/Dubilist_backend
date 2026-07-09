@@ -39,6 +39,12 @@ const listingsCache = new NodeCache({
   });
 
   const S3_BUCKET = process.env.AWS_S3_BUCKET || 'dubilist-images';
+
+  // Where uploads go. Local disk is the default; S3 must be opted into
+  // explicitly with STORAGE_DRIVER=s3 so a stray AWS_ACCESS_KEY_ID in the
+  // environment can never silently switch the storage backend.
+  const USE_S3 = String(process.env.STORAGE_DRIVER || 'local').toLowerCase() === 's3';
+
   const CATEGORY_IMAGE_MAX_COUNT = 2;
   const CATEGORY_IMAGE_MAX_SIZE = 1 * 1024 * 1024; // 1MB
 
@@ -407,8 +413,7 @@ app.options("*", cors());
 
       const s3Key = generateS3Key(folder, req.file.originalname, req.user.id);
 
-      // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
-      if (!process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID.includes('your_aws')) {
+      if (!USE_S3) {
         const uploadDir = path.join(__dirname, '../uploads', folder);
         if (!fs.existsSync(uploadDir)) {
           fs.mkdirSync(uploadDir, { recursive: true });
@@ -480,9 +485,8 @@ app.options("*", cors());
 
       const uploadedImages = [];
 
-      // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
-      const isLocal = !process.env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID.includes('your_aws');
-      
+      const isLocal = !USE_S3;
+
       if (isLocal) {
         const uploadDir = path.join(__dirname, '../uploads', folder);
         if (!fs.existsSync(uploadDir)) {
@@ -574,16 +578,29 @@ app.post('/api/upload/resume', authenticateToken, uploadResume.single('resume'),
     const folder = 'resumes';
     const s3Key = generateS3Key(folder, req.file.originalname, req.user.id);
 
-    const command = new PutObjectCommand({
-      Bucket: S3_BUCKET,
-      Key: s3Key,
-      Body: req.file.buffer,
-      ContentType: req.file.mimetype,
-    });
+    let resumeUrl;
+    if (!USE_S3) {
+      const uploadDir = path.join(__dirname, '../uploads', folder);
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      }
+      const fileName = path.basename(s3Key);
+      fs.writeFileSync(path.join(uploadDir, fileName), req.file.buffer);
 
-    await s3Client.send(command);
+      const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+      resumeUrl = `${baseUrl}/uploads/${folder}/${fileName}`;
+    } else {
+      const command = new PutObjectCommand({
+        Bucket: S3_BUCKET,
+        Key: s3Key,
+        Body: req.file.buffer,
+        ContentType: req.file.mimetype,
+      });
 
-    const resumeUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+      await s3Client.send(command);
+
+      resumeUrl = `https://${S3_BUCKET}.s3.${process.env.AWS_REGION || 'eu-north-1'}.amazonaws.com/${s3Key}`;
+    }
 
     res.status(201).json({
       success: true,
@@ -613,8 +630,15 @@ app.post('/api/upload/resume', authenticateToken, uploadResume.single('resume'),
       error: { message: 'Not allowed to delete this file' }
     });
   }
-      const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: s3Key });
-      await s3Client.send(command);
+      if (!USE_S3) {
+        const localPath = path.join(__dirname, '../uploads', s3Key);
+        if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+        const localThumb = path.join(__dirname, '../uploads', thumbName(s3Key));
+        if (fs.existsSync(localThumb)) fs.unlinkSync(localThumb);
+      } else {
+        const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: s3Key });
+        await s3Client.send(command);
+      }
 
       res.json({ success: true, message: 'Image deleted successfully' });
     } catch (error) {
@@ -626,6 +650,13 @@ app.post('/api/upload/resume', authenticateToken, uploadResume.single('resume'),
   // Get presigned URL for direct upload
   app.post('/api/upload/presigned-url', authenticateToken, async (req, res) => {
     try {
+      if (!USE_S3) {
+        return res.status(400).json({
+          success: false,
+          error: { message: 'Presigned uploads require STORAGE_DRIVER=s3; POST the file to /api/upload/image instead' }
+        });
+      }
+
       const { filename, contentType, folder = 'listings' } = req.body;
 
       if (!filename || !contentType) {
@@ -2559,10 +2590,17 @@ listingsCache.flushAll();
       const image = await prisma.listingImage.findUnique({ where: { id: imageId } });
       if (image && image.s3Key) {
         try {
-          const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: image.s3Key });
-          await s3Client.send(command);
-        } catch (s3Error) {
-          console.error('S3 delete error:', s3Error);
+          if (!USE_S3) {
+            const localPath = path.join(__dirname, '../uploads', image.s3Key);
+            if (fs.existsSync(localPath)) fs.unlinkSync(localPath);
+            const localThumb = path.join(__dirname, '../uploads', thumbName(image.s3Key));
+            if (fs.existsSync(localThumb)) fs.unlinkSync(localThumb);
+          } else {
+            const command = new DeleteObjectCommand({ Bucket: S3_BUCKET, Key: image.s3Key });
+            await s3Client.send(command);
+          }
+        } catch (delError) {
+          console.error('Image delete error:', delError);
         }
       }
 
