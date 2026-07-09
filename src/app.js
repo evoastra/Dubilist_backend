@@ -15,6 +15,7 @@
   const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
   const multer = require('multer');
   const sharp = require('sharp');
+  const sharp = require('sharp');
   const fs = require('fs');
   const path = require('path');
   const designersRoutes = require('./modules/designers/designers.routes');
@@ -39,6 +40,8 @@ const listingsCache = new NodeCache({
   });
 
   const S3_BUCKET = process.env.AWS_S3_BUCKET || 'dubilist-images';
+  const CATEGORY_IMAGE_MAX_COUNT = 2;
+  const CATEGORY_IMAGE_MAX_SIZE = 1 * 1024 * 1024; // 1MB
   const CATEGORY_IMAGE_MAX_COUNT = 2;
   const CATEGORY_IMAGE_MAX_SIZE = 1 * 1024 * 1024; // 1MB
 
@@ -88,6 +91,46 @@ const uploadResume = multer({
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 8);
     return `${folder}/${userId}_${timestamp}_${random}.${ext}`;
+  };
+
+  // ── Image optimization (compress + resize + thumbnail) ───────────────────
+  // Re-encodes an uploaded image to a web-friendly size/quality. Keeps the
+  // original format so PNG logos stay transparent. Returns a Buffer.
+  const optimizeImage = async (buffer, mimetype, { maxDim, quality }) => {
+    let pipeline = sharp(buffer)
+      .rotate() // honor EXIF orientation so phone photos aren't sideways
+      .resize({ width: maxDim, height: maxDim, fit: 'inside', withoutEnlargement: true });
+
+    if (mimetype === 'image/png') {
+      pipeline = pipeline.png({ compressionLevel: 9, palette: true });
+    } else if (mimetype === 'image/webp') {
+      pipeline = pipeline.webp({ quality });
+    } else {
+      // jpeg / jpg / anything else → optimized JPEG
+      pipeline = pipeline.jpeg({ quality, mozjpeg: true });
+    }
+    return pipeline.toBuffer();
+  };
+
+  // Adds a "_thumb" suffix before the file extension (foo.jpg -> foo_thumb.jpg)
+  const thumbName = (fileName) => {
+    const dot = fileName.lastIndexOf('.');
+    return dot === -1 ? `${fileName}_thumb` : `${fileName.slice(0, dot)}_thumb${fileName.slice(dot)}`;
+  };
+
+  // Writes an optimized full image + a small thumbnail to disk.
+  // Returns { size, thumbFileName } (thumbFileName is null when no thumb made).
+  const saveOptimizedLocal = async (buffer, mimetype, uploadDir, fileName, makeThumb) => {
+    const full = await optimizeImage(buffer, mimetype, { maxDim: 1600, quality: 80 });
+    fs.writeFileSync(path.join(uploadDir, fileName), full);
+
+    let thumbFileName = null;
+    if (makeThumb) {
+      const thumb = await optimizeImage(buffer, mimetype, { maxDim: 400, quality: 68 });
+      thumbFileName = thumbName(fileName);
+      fs.writeFileSync(path.join(uploadDir, thumbFileName), thumb);
+    }
+    return { size: full.length, thumbFileName };
   };
 
   // ── Image optimization (compress + resize + thumbnail) ───────────────────
@@ -406,6 +449,18 @@ app.options("*", cors());
         }
       }
 
+
+      const isCategoryFolder = String(folder).toLowerCase() === 'categories';
+      if (isCategoryFolder) {
+        if (req.user.role.name !== 'admin') {
+          return res.status(403).json({ success: false, error: { message: 'Only admins can upload category images' } });
+        }
+
+        if (req.file.size > CATEGORY_IMAGE_MAX_SIZE) {
+          return res.status(400).json({ success: false, error: { message: 'Category images must be 1MB or smaller' } });
+        }
+      }
+
       const s3Key = generateS3Key(folder, req.file.originalname, req.user.id);
 
       // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
@@ -421,13 +476,23 @@ app.options("*", cors());
           req.file.buffer, req.file.mimetype, uploadDir, fileName, makeThumb
         );
 
+        const fileName = path.basename(s3Key);
+        const makeThumb = !isCategoryFolder; // listings get a thumbnail; categories don't need one
+        const { size, thumbFileName } = await saveOptimizedLocal(
+          req.file.buffer, req.file.mimetype, uploadDir, fileName, makeThumb
+        );
+
         const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+        const imageUrl = `${baseUrl}/uploads/${folder}/${fileName}`;
+        const thumbnailUrl = thumbFileName ? `${baseUrl}/uploads/${folder}/${thumbFileName}` : imageUrl;
+
         const imageUrl = `${baseUrl}/uploads/${folder}/${fileName}`;
         const thumbnailUrl = thumbFileName ? `${baseUrl}/uploads/${folder}/${thumbFileName}` : imageUrl;
 
         return res.status(201).json({
           success: true,
           message: 'Image uploaded locally',
+          data: { url: imageUrl, thumbnailUrl, s3Key: s3Key, size, mimetype: req.file.mimetype }
           data: { url: imageUrl, thumbnailUrl, s3Key: s3Key, size, mimetype: req.file.mimetype }
         });
       }
@@ -479,6 +544,23 @@ app.options("*", cors());
         }
       }
 
+
+      const isCategoryFolder = String(folder).toLowerCase() === 'categories';
+      if (isCategoryFolder) {
+        if (req.user.role.name !== 'admin') {
+          return res.status(403).json({ success: false, error: { message: 'Only admins can upload category images' } });
+        }
+
+        if (req.files.length > CATEGORY_IMAGE_MAX_COUNT) {
+          return res.status(400).json({ success: false, error: { message: `Only ${CATEGORY_IMAGE_MAX_COUNT} category images are allowed` } });
+        }
+
+        const oversizedFile = req.files.find(file => file.size > CATEGORY_IMAGE_MAX_SIZE);
+        if (oversizedFile) {
+          return res.status(400).json({ success: false, error: { message: 'Category images must be 1MB or smaller' } });
+        }
+      }
+
       const uploadedImages = [];
 
       // ✅ LOCAL STORAGE FALLBACK if AWS keys are placeholders
@@ -491,6 +573,7 @@ app.options("*", cors());
         }
 
         const makeThumb = !isCategoryFolder; // listings get thumbnails; categories don't need one
+        const makeThumb = !isCategoryFolder; // listings get thumbnails; categories don't need one
         for (const file of req.files) {
           const s3Key = generateS3Key(folder, file.originalname, req.user.id);
           const fileName = path.basename(s3Key);
@@ -499,7 +582,16 @@ app.options("*", cors());
             file.buffer, file.mimetype, uploadDir, fileName, makeThumb
           );
 
+          const fileName = path.basename(s3Key);
+
+          const { size, thumbFileName } = await saveOptimizedLocal(
+            file.buffer, file.mimetype, uploadDir, fileName, makeThumb
+          );
+
           const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+          const imageUrl = `${baseUrl}/uploads/${folder}/${fileName}`;
+          const thumbnailUrl = thumbFileName ? `${baseUrl}/uploads/${folder}/${thumbFileName}` : imageUrl;
+          uploadedImages.push({ url: imageUrl, thumbnailUrl, s3Key: s3Key, size, mimetype: file.mimetype });
           const imageUrl = `${baseUrl}/uploads/${folder}/${fileName}`;
           const thumbnailUrl = thumbFileName ? `${baseUrl}/uploads/${folder}/${thumbFileName}` : imageUrl;
           uploadedImages.push({ url: imageUrl, thumbnailUrl, s3Key: s3Key, size, mimetype: file.mimetype });
@@ -1377,6 +1469,21 @@ app.get('/api/users/me/listings', authenticateToken, async (req, res) => {
         }
       }
 
+      if (thumbnails !== undefined) {
+        if (!Array.isArray(thumbnails)) {
+          return res.status(400).json({ success: false, error: { message: 'Category thumbnails must be an array' } });
+        }
+
+        if (thumbnails.length > CATEGORY_IMAGE_MAX_COUNT) {
+          return res.status(400).json({ success: false, error: { message: `Only ${CATEGORY_IMAGE_MAX_COUNT} category images are allowed` } });
+        }
+
+        const hasInvalidThumbnail = thumbnails.some(thumb => typeof thumb !== 'string' || thumb.length > 1000);
+        if (hasInvalidThumbnail) {
+          return res.status(400).json({ success: false, error: { message: 'Category thumbnails contain an invalid image URL' } });
+        }
+      }
+
       const updated = await prisma.category.update({
         where: { id },
         data: {
@@ -1901,6 +2008,7 @@ app.get('/api/listings', async (req, res) => {
       } = req.body;
 
       // ===== VALIDATION =====
+      if (!title || (title+'').trim().length === 0 || description === undefined || description === null || (description+'').trim().length === 0 || price === undefined || !categoryId) {
       if (!title || (title+'').trim().length === 0 || description === undefined || description === null || (description+'').trim().length === 0 || price === undefined || !categoryId) {
         return res.status(400).json({ 
           success: false, 
@@ -2475,6 +2583,7 @@ listingsCache.flushAll();
       }
 
       const { url, thumbnailUrl, s3Key, orderIndex = 0, isPrimary = false } = req.body;
+      const { url, thumbnailUrl, s3Key, orderIndex = 0, isPrimary = false } = req.body;
 
       // Validate required fields
       if (!url) {
@@ -2504,6 +2613,7 @@ listingsCache.flushAll();
         data: {
           listingId,
           imageUrl: url,
+          thumbnailUrl: thumbnailUrl || null,
           thumbnailUrl: thumbnailUrl || null,
           s3Key,
           orderIndex,
