@@ -35,24 +35,24 @@ async function main() {
   // 2. CREATE PERMISSIONS
   // ==========================================
   const permissions = [
-    { key: 'listing.create', description: 'Create listings' },
-    { key: 'listing.edit', description: 'Edit listings' },
-    { key: 'listing.delete', description: 'Delete listings' },
-    { key: 'listing.approve', description: 'Approve listings' },
-    { key: 'listing.reject', description: 'Reject listings' },
-    { key: 'user.view', description: 'View users' },
-    { key: 'user.edit', description: 'Edit users' },
-    { key: 'user.block', description: 'Block users' },
-    { key: 'user.delete', description: 'Delete users' },
-    { key: 'report.view', description: 'View reports' },
-    { key: 'report.action', description: 'Take action on reports' },
-    { key: 'analytics.view', description: 'View analytics' },
-    { key: 'settings.edit', description: 'Edit system settings' },
+    { name: 'listing.create', description: 'Create listings' },
+    { name: 'listing.edit', description: 'Edit listings' },
+    { name: 'listing.delete', description: 'Delete listings' },
+    { name: 'listing.approve', description: 'Approve listings' },
+    { name: 'listing.reject', description: 'Reject listings' },
+    { name: 'user.view', description: 'View users' },
+    { name: 'user.edit', description: 'Edit users' },
+    { name: 'user.block', description: 'Block users' },
+    { name: 'user.delete', description: 'Delete users' },
+    { name: 'report.view', description: 'View reports' },
+    { name: 'report.action', description: 'Take action on reports' },
+    { name: 'analytics.view', description: 'View analytics' },
+    { name: 'settings.edit', description: 'Edit system settings' },
   ];
 
   for (const perm of permissions) {
-    await prisma.permission.upsert({
-      where: { key: perm.key },
+    await prisma.permissions.upsert({
+      where: { name: perm.name },
       update: {},
       create: perm,
     });
@@ -185,7 +185,6 @@ async function main() {
       country: 'UAE',
       contactPhone: '+971501234567',
       status: 'approved',
-      condition: 'new',
       isNegotiable: true,
       publishedAt: new Date(),
     },
@@ -199,7 +198,6 @@ async function main() {
       country: 'UAE',
       contactPhone: '+971501234567',
       status: 'approved',
-      condition: 'used',
       isNegotiable: true,
       publishedAt: new Date(),
     },
@@ -213,7 +211,6 @@ async function main() {
       country: 'UAE',
       contactPhone: '+971501234567',
       status: 'approved',
-      condition: 'used',
       isNegotiable: true,
       publishedAt: new Date(),
     },
@@ -227,7 +224,6 @@ async function main() {
       country: 'UAE',
       contactPhone: '+971501234567',
       status: 'approved',
-      condition: null,
       isNegotiable: true,
       publishedAt: new Date(),
     },
@@ -241,7 +237,6 @@ async function main() {
       country: 'UAE',
       contactPhone: '+971501234567',
       status: 'pending',
-      condition: 'used',
       isNegotiable: false,
     },
   ];
