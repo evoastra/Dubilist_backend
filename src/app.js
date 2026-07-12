@@ -20,12 +20,8 @@
   const designersRoutes = require('./modules/designers/designers.routes');
   const bookingsRoutes = require('./modules/bookings/bookings.routes');
  const jobApplicationsRoutes = require('./modules/jobApplications/jobApplications.routes');
- const NodeCache = require('node-cache');
-const listingsCache = new NodeCache({ 
-  stdTTL: 300,      // 5 minutes cache
-  checkperiod: 60,  // Cleanup every minute
-  useClones: false  // Better performance
-});
+const { listingsCache, flushListingsCache } = require('./utils/listingsCache');
+const { resolveCategoryFilter, getRootCategorySlug, CONDITION_REQUIRED_SLUGS } = require('./utils/categoryResolver');
   const app = express();
   app.set('trust proxy', true);
 
@@ -1490,9 +1486,11 @@ app.get('/api/listings', async (req, res) => {
     }
 
     // Build where clause
+    const { ids: categoryIds, rootSlug } = await resolveCategoryFilter(prisma, categoryId);
+
     const where = {
       isDeleted: false,
-      ...(categoryId ? { categoryId } : {}),
+      ...(categoryIds ? { categoryId: { in: categoryIds } } : {}),
       ...(city ? { city: { contains: city } } : {}),
       ...(minPrice !== undefined || maxPrice !== undefined ? {
         price: {
@@ -1503,26 +1501,26 @@ app.get('/api/listings', async (req, res) => {
       ...(req.user?.role?.name === 'admin' ? {} : { status: 'approved' }),
     };
 
-    // Category-specific filters
-    if (categoryId === CATEGORY.MOTORS) {
+    // Category-specific filters (by canonical slug, not legacy numeric id)
+    if (rootSlug === 'motors') {
       where.motorDetails = {
         ...(condition ? { condition } : {}),
         ...(make ? { make } : {}),
         ...(year ? { year } : {}),
       };
     }
-    if (categoryId === CATEGORY.ELECTRONICS) {
+    if (rootSlug === 'mobiles-tablets') {
       where.electronicDetails = {
         ...(condition ? { condition } : {}),
         ...(brand ? { brand } : {}),
       };
     }
-    if (categoryId === CATEGORY.FURNITURE) {
+    if (rootSlug === 'furniture-garden') {
       where.furnitureDetails = {
         ...(condition ? { condition } : {}),
       };
     }
-    if (categoryId === CATEGORY.CLASSIFIEDS) {
+    if (rootSlug === 'classifieds') {
       where.classifiedDetails = {
         ...(condition ? { condition } : {}),
         ...(brand ? { brand } : {}),
@@ -1971,8 +1969,10 @@ app.get('/api/listings', async (req, res) => {
         });
       }
 
+      const rootCategorySlug = await getRootCategorySlug(prisma, category);
+
       // Category-specific validation
-      if ([1, 5, 6].includes(parseInt(categoryId)) && !condition) {
+      if (CONDITION_REQUIRED_SLUGS.has(rootCategorySlug) && !condition) {
         return res.status(400).json({
           success: false,
           error: { message: 'Condition is required for this category' }
@@ -2004,7 +2004,7 @@ app.get('/api/listings', async (req, res) => {
         });
 
         // ===== 1. MOTORS CATEGORY =====
-        if (categoryId == 1) {
+        if (rootCategorySlug === 'motors') {
           await tx.motorListing.create({
             data: {
               listingId: baseListing.id,
@@ -2044,7 +2044,7 @@ app.get('/api/listings', async (req, res) => {
         }
 
         // ===== 2. JOBS CATEGORY =====
-        if (categoryId == 2) {
+        if (rootCategorySlug === 'jobs') {
           await tx.jobListing.create({
             data: {
               listingId: baseListing.id,
@@ -2079,7 +2079,7 @@ app.get('/api/listings', async (req, res) => {
         }
 
         // ===== 3. PROPERTY CATEGORY =====
-        if (categoryId == 3) {
+        if (rootCategorySlug === 'property') {
           await tx.propertyListing.create({
             data: {
               listingId: baseListing.id,
@@ -2117,7 +2117,7 @@ app.get('/api/listings', async (req, res) => {
         }
 
         // ===== 4. CLASSIFIEDS CATEGORY =====
-        if (categoryId == 4) {
+        if (rootCategorySlug === 'classifieds') {
           await tx.classifiedListing.create({
             data: {
               listingId: baseListing.id,
@@ -2150,7 +2150,7 @@ app.get('/api/listings', async (req, res) => {
         }
 
         // ===== 5. ELECTRONICS CATEGORY =====
-        if (categoryId == 5) {
+        if (rootCategorySlug === 'mobiles-tablets') {
           await tx.electronicListing.create({
             data: {
               listingId: baseListing.id,
@@ -2194,7 +2194,7 @@ app.get('/api/listings', async (req, res) => {
         }
 
         // ===== 6. FURNITURE CATEGORY =====
-        if (categoryId == 6) {
+        if (rootCategorySlug === 'furniture-garden') {
           await tx.furnitureListing.create({
             data: {
               listingId: baseListing.id,

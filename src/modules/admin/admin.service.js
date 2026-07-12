@@ -6,6 +6,7 @@
 const bcrypt = require('bcryptjs');
 const { prisma } = require('../../config/database');
 const { logger } = require('../../config/logger');
+const { flushListingsCache } = require('../../utils/listingsCache');
 
 class AdminService {
   // ==========================================
@@ -451,6 +452,10 @@ async getDashboardStats() {
         data: { listingId: listing.id }
       }
     }).catch(() => {});
+
+    if (status === 'approved' || status === 'rejected') {
+      flushListingsCache();
+    }
 
     logger.info({ listingId, status }, 'Listing status updated');
 
